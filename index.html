@@ -7,8 +7,6 @@
     body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background: url('dark-castle.png') no-repeat center center fixed;
-      background-size: cover;
       width: 100%;
       height: 100%;
       color: white;
@@ -18,8 +16,18 @@
     .top-bar{display:flex;justify-content:space-between;align-items:center;padding:10px 20px;background:rgba(10,15,30,0.7);border-bottom:3px solid #1e3d59;font-size:14px;}
     .currency{display:flex;gap:15px;}
     .currency div{background:#2d3e50;padding:5px 12px;border-radius:8px;display:flex;align-items:center;gap:5px;}
-    .screen{display:none;padding:20px;}
-    #menuScreen{display:block;text-align:center;}
+    .screen{display:none;height:100vh;}
+    #menuScreen {
+      display: block;
+      text-align: center;
+      background: url('menu-bg.png') no-repeat center center;
+      background-size: cover;
+    }
+    #battleScreen {
+      text-align: center;
+      background: url('arena-bg.png') no-repeat center center;
+      background-size: cover;
+    }
     .battle-btn{background:#ffcc00;padding:20px 60px;border-radius:20px;font-size:32px;color:black;cursor:pointer;margin-top:20px;border:3px solid #fff;box-shadow:0 0 25px rgba(255,255,0,0.9);}
     .cancel-btn{background:#ff4444;padding:15px 40px;border-radius:15px;font-size:24px;color:white;cursor:pointer;margin-top:20px;border:3px solid #fff;box-shadow:0 0 20px rgba(255,0,0,0.7);display:none;}
     .deck,#shop{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px auto;max-width:400px;}
@@ -47,7 +55,7 @@
       border: 2px solid white;
       border-radius: 10px;
       background: #222;
-      display: none; /* hidden by default */
+      display: none; /* hidden until battle */
       justify-content: space-between;
       padding: 2px;
     }
@@ -74,7 +82,7 @@
   </div>
 
   <!-- Menu -->
-  <div id="menuScreen" class="screen" style="display:block;">
+  <div id="menuScreen" class="screen">
     <h2>🏆 Flash Royale</h2>
     <p>Name: <b id="playerNameLabel"></b></p>
     <p>Your trophies: <b id="trophies">0</b></p>
@@ -85,7 +93,7 @@
   </div>
 
   <!-- Battle -->
-  <div id="battleScreen" class="screen" style="display:none;">
+  <div id="battleScreen" class="screen">
     <canvas id="battleCanvas" width="800" height="700"></canvas>
   </div>
   <div id="cardBar"></div>
@@ -188,16 +196,44 @@
     function cancelSearch(){searching=false;db.ref("queue/"+playerId).remove();document.getElementById("statusText").innerText="Idle";document.getElementById("battleBtn").style.display="inline-block";document.getElementById("cancelBtn").style.display="none";}
 
     // --- Battle ---
+    let canvas=document.getElementById("battleCanvas"),ctx=canvas.getContext("2d");
+    let placementCircle=null;
+
+    canvas.addEventListener("mousemove",(e)=>{
+      if(!selectedCard){placementCircle=null;return;}
+      let rect=canvas.getBoundingClientRect();
+      let x=e.clientX-rect.left,y=e.clientY-rect.top;
+      if(y>=canvas.height/2){placementCircle={x,y};}else{placementCircle=null;}
+    });
+
+    canvas.addEventListener("click",(e)=>{
+      if(!selectedCard) return;
+      let rect=canvas.getBoundingClientRect();
+      let x=e.clientX-rect.left,y=e.clientY-rect.top;
+      if(y<canvas.height/2) return;
+      let lane="mid"; if(y<canvas.height*0.33) lane="top"; else if(y>canvas.height*0.66) lane="bot";
+      let cost=Math.max(1,selectedCard.cost+(Math.floor(Math.random()*3)-1));
+      if(elixir>=cost){sendAction(selectedCard,lane);cycleHand(selectedCard);selectedCard=null;}
+    });
+
     function startBattle(){
       searching=false;
       db.ref("queue/"+playerId).remove();
       document.getElementById("menuScreen").style.display="none";
       document.getElementById("battleScreen").style.display="block";
       document.getElementById("cardBar").style.display="flex";
-      document.getElementById("elixirBar").style.display="flex"; // show elixir bar only in battle
+      document.getElementById("elixirBar").style.display="flex";
       document.getElementById("statusText").innerText="In Battle";
       document.getElementById("cancelBtn").style.display="none";
       initDeck();
+      requestAnimationFrame(drawBattle);
+    }
+
+    function drawBattle(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      // draw placement circle
+      if(placementCircle){ctx.strokeStyle="white";ctx.beginPath();ctx.arc(placementCircle.x,placementCircle.y,25,0,Math.PI*2);ctx.stroke();}
+      requestAnimationFrame(drawBattle);
     }
 
     function sendAction(card,lane){
