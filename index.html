@@ -27,6 +27,34 @@
       font-size:20px; color:black; cursor:pointer; margin:10px;
       border:2px solid #fff; box-shadow:0 0 10px rgba(255,255,0,0.6);
     }
+    /* Card bar */
+    #cardBar {
+      position:fixed; bottom:70px; left:50%; transform:translateX(-50%);
+      display:flex; gap:10px;
+    }
+    .card {
+      width:90px; height:120px;
+      background:linear-gradient(to bottom,#333,#111);
+      border:3px solid #888; border-radius:10px;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      color:white; font-size:12px; cursor:pointer;
+    }
+    .card img { width:60px; }
+    .elixir-cost {
+      background:#9c27b0; border-radius:50%;
+      width:24px; height:24px; display:flex; align-items:center; justify-content:center;
+      font-size:12px; font-weight:bold; border:2px solid white;
+      position:absolute; top:5px; left:5px;
+    }
+    /* Elixir bar */
+    #elixirBar {
+      position:fixed; bottom:50px; left:50%; transform:translateX(-50%);
+      width:300px; height:20px; border:2px solid white; border-radius:10px;
+      background:#222;
+    }
+    #elixirFill {
+      background:purple; width:0%; height:100%; border-radius:10px;
+    }
   </style>
 
   <!-- Firebase SDKs -->
@@ -50,6 +78,12 @@
     <div id="startBtn" class="battle-btn" style="display:none;" onclick="startBattle()">START BATTLE</div>
 
     <canvas id="battleCanvas" width="800" height="500" style="display:none;"></canvas>
+  </div>
+
+  <!-- Card Bar + Elixir -->
+  <div id="cardBar" style="display:none;"></div>
+  <div id="elixirBar" style="display:none;">
+    <div id="elixirFill"></div>
   </div>
 
   <!-- Tabs -->
@@ -78,6 +112,15 @@
     let roomId=null, playerId="player-"+Math.floor(Math.random()*10000);
     let towers=[], units=[], ctx;
     let loop=null;
+    let elixir=5;
+    let deck=[
+      {name:"Knight", hp:200, dmg:20, range:20, cost:3, img:"https://img.icons8.com/color/96/knight.png"},
+      {name:"Archer", hp:120, dmg:15, range:120, cost:3, img:"https://img.icons8.com/color/96/bow.png"},
+      {name:"Golem", hp:300, dmg:10, range:30, cost:5, img:"https://img.icons8.com/color/96/rock.png"},
+      {name:"Dragon", hp:150, dmg:30, range:80, cost:4, img:"https://img.icons8.com/color/96/dragon.png"}
+    ];
+    let hand=[], drawPile=[];
+    let selectedCard=null;
 
     // --- UI Switcher ---
     function switchScreen(id){
@@ -102,103 +145,140 @@
     // --- Start Battle ---
     function startBattle(){
       document.getElementById("battleCanvas").style.display="block";
+      document.getElementById("cardBar").style.display="flex";
+      document.getElementById("elixirBar").style.display="block";
       ctx=document.getElementById("battleCanvas").getContext("2d");
       initBattle();
+      initDeck();
       loop=setInterval(updateBattle,50);
 
       // Sync opponent actions
       db.ref(`rooms/${roomId}/lastAction`).on("value",(snap)=>{
         let action=snap.val();
         if(action && action.player!==playerId){
-          spawnUnit(action.card, "enemy");
+          spawnUnit(action.card, "enemy", action.lane);
         }
       });
 
-      // Keybind: press 1-4 to play a troop
-      document.addEventListener("keydown",(e)=>{
-        if(e.key==="1") sendAction({name:"Knight", hp:200, dmg:20, range:20});
-        if(e.key==="2") sendAction({name:"Archer", hp:120, dmg:15, range:120});
-        if(e.key==="3") sendAction({name:"Golem", hp:300, dmg:10, range:30});
-        if(e.key==="4") sendAction({name:"Dragon", hp:150, dmg:30, range:80});
+      // Click battlefield to deploy
+      document.getElementById("battleCanvas").addEventListener("click",(e)=>{
+        if(!selectedCard) return;
+        let rect=e.target.getBoundingClientRect();
+        let y=e.clientY-rect.top;
+        let lane=y<250?"top":"bot";
+        if(elixir>=selectedCard.cost){
+          sendAction(selectedCard,lane);
+          cycleHand(selectedCard);
+          selectedCard=null;
+        }
       });
     }
 
-    function sendAction(card){
+    function sendAction(card,lane){
       db.ref(`rooms/${roomId}/lastAction`).set({
-        type:"playCard", card, player:playerId, timestamp:Date.now()
+        type:"playCard", card, player:playerId, lane, timestamp:Date.now()
       });
-      spawnUnit(card,"ally");
+      spawnUnit(card,"ally",lane);
+      elixir-=card.cost;
     }
 
     // --- Battlefield ---
     function initBattle(){
       towers=[
-        {x:100,y:200,hp:500,color:"blue"},
-        {x:700,y:150,hp:300,color:"red"},
-        {x:700,y:350,hp:300,color:"red"},
-        {x:750,y:250,hp:600,color:"red"} // enemy king
+        {x:100,y:250,hp:600,color:"blue",lane:"king"},
+        {x:650,y:150,hp:300,color:"red",lane:"top"},
+        {x:650,y:350,hp:300,color:"red",lane:"bot"},
+        {x:750,y:250,hp:600,color:"red",lane:"king"}
       ];
       units=[];
     }
 
-    function spawnUnit(card,side){
+    function spawnUnit(card,side,lane){
       let dir=side==="ally"?1:-1;
       let color=side==="ally"?"blue":"red";
       let x=side==="ally"?150:650;
+      let y=(lane==="top")?150:350;
       units.push({
-        name:card.name,x,y:250,hp:card.hp,dmg:card.dmg,range:card.range,
-        dir,color,cooldown:0
+        name:card.name,x,y,hp:card.hp,dmg:card.dmg,range:card.range,
+        dir,color,cooldown:0,lane
       });
     }
 
     function updateBattle(){
       ctx.clearRect(0,0,800,500);
 
-      // Draw towers
+      // Elixir regen
+      elixir=Math.min(elixir+0.02,10);
+      document.getElementById("elixirFill").style.width=(elixir*10)+"%";
+
+      // Draw lanes
+      ctx.strokeStyle="gray"; ctx.beginPath();
+      ctx.moveTo(0,250); ctx.lineTo(800,250); ctx.stroke();
+
+      // Towers
       towers.forEach(t=>{
         ctx.fillStyle=t.color;
-        ctx.fillRect(t.x,t.y,40,60);
+        ctx.fillRect(t.x-20,t.y-30,40,60);
         ctx.fillStyle="white";
-        ctx.fillText("HP:"+t.hp, t.x, t.y-10);
+        ctx.fillText("HP:"+t.hp, t.x-20, t.y-40);
       });
 
       // Units
       units.forEach(u=>{
         ctx.fillStyle=u.color;
         ctx.beginPath();
-        ctx.arc(u.x,u.y,10,0,Math.PI*2);
-        ctx.fill();
+        ctx.arc(u.x,u.y,10,0,Math.PI*2); ctx.fill();
 
-        // Look for enemy in range
-        let enemies=units.filter(e=>e.color!==u.color);
+        let enemies=units.filter(e=>e.color!==u.color && e.lane===u.lane);
         let target=enemies.find(e=>Math.abs(e.x-u.x)<u.range);
         if(target){
           if(u.cooldown<=0){
-            target.hp-=u.dmg;
-            u.cooldown=20;
+            target.hp-=u.dmg; u.cooldown=20;
           }
         } else {
-          // Move if no target
           u.x+=u.dir*2;
         }
-
         if(u.cooldown>0) u.cooldown--;
 
-        // Check tower collisions
         towers.forEach(t=>{
-          if(t.color!==u.color && Math.abs(u.x-t.x)<30 && Math.abs(u.y-t.y)<50){
-            t.hp-=u.dmg;
-            u.hp=0;
-            if(t.hp<=0){
+          if(t.color!==u.color && t.lane===u.lane && Math.abs(u.x-t.x)<30){
+            t.hp-=u.dmg; u.hp=0;
+            if(t.hp<=0 && t.lane==="king"){
               alert((u.color==="blue"?"Blue":"Red")+" wins!");
               clearInterval(loop);
             }
           }
         });
       });
-
-      // Remove dead units
       units=units.filter(u=>u.hp>0);
+    }
+
+    // --- Deck & Hand ---
+    function initDeck(){
+      drawPile=[...deck];
+      hand=drawPile.splice(0,4);
+      renderHand();
+    }
+    function renderHand(){
+      let cardBar=document.getElementById("cardBar");
+      cardBar.innerHTML="";
+      hand.forEach(c=>{
+        let d=document.createElement("div");
+        d.className="card";
+        d.innerHTML=`<img src="${c.img}"><b>${c.name}</b><br>Cost:${c.cost}`;
+        d.onclick=()=>{ selectedCard=c; };
+        cardBar.appendChild(d);
+      });
+    }
+    function cycleHand(card){
+      let idx=hand.indexOf(card);
+      if(idx>-1){
+        hand.splice(idx,1);
+        if(drawPile.length>0){
+          hand.push(drawPile.shift());
+        }
+      }
+      renderHand();
     }
   </script>
 </body>
