@@ -55,7 +55,7 @@
   </div>
 
   <div id="battleScreen" class="screen" style="display:none;">
-    <canvas id="battleCanvas" width="800" height="500"></canvas>
+    <canvas id="battleCanvas" width="800" height="700"></canvas>
   </div>
   <div id="cardBar"></div>
   <div id="elixirBar"><div id="elixirFill"></div></div>
@@ -67,6 +67,7 @@
   </div>
 
   <script>
+    // --- Firebase Init ---
     const firebaseConfig = {
       apiKey:"AIzaSyA3FUH9RZiQ9IRChNpGqNrgjt2r5AA5RF8",
       authDomain:"flash-royale-a92c0.firebaseapp.com",
@@ -80,29 +81,39 @@
     firebase.initializeApp(firebaseConfig);
     const db=firebase.database();
 
-    let playerId="player-"+Math.floor(Math.random()*10000);
+    // --- Persistent Player ID for Rejoin ---
+    let playerId = localStorage.getItem("playerId");
+    if(!playerId){
+      playerId = "player-"+Math.floor(Math.random()*10000);
+      localStorage.setItem("playerId", playerId);
+    }
+
     let roomId=null, ctx, loop;
     let isHost=false;
     let searching=false;
     let towers=[], units=[];
     let elixir=5;
-    let deck=[{name:"Knight",hp:200,dmg:20,range:20,cost:3,img:"https://img.icons8.com/color/96/knight.png"},
-              {name:"Archer",hp:120,dmg:15,range:120,cost:3,img:"https://img.icons8.com/color/96/bow.png"},
-              {name:"Golem",hp:300,dmg:10,range:30,cost:5,img:"https://img.icons8.com/color/96/rock.png"},
-              {name:"Dragon",hp:150,dmg:30,range:80,cost:4,img:"https://img.icons8.com/color/96/dragon.png"}];
+    let deck=[
+      {name:"Knight",hp:200,dmg:20,range:20,cost:3,img:"https://img.icons8.com/color/96/knight.png"},
+      {name:"Archer",hp:120,dmg:15,range:120,cost:3,img:"https://img.icons8.com/color/96/bow.png"},
+      {name:"Golem",hp:300,dmg:10,range:30,cost:5,img:"https://img.icons8.com/color/96/rock.png"},
+      {name:"Dragon",hp:150,dmg:30,range:80,cost:4,img:"https://img.icons8.com/color/96/dragon.png"}
+    ];
     let hand=[], drawPile=[], selectedCard=null;
 
+    // Render Deck + Collection
     function renderDeck(){let deckEl=document.getElementById("deck");deckEl.innerHTML="";deck.forEach(c=>{let d=document.createElement("div");d.className="card";d.innerHTML=`<div class="elixir-cost">${c.cost}</div><img src="${c.img}"><b>${c.name}</b>`;deckEl.appendChild(d);});}
     function renderCollection(){let col=document.getElementById("collection");col.className="deck";col.innerHTML="";deck.forEach(c=>{let d=document.createElement("div");d.className="card";d.innerHTML=`<div class="elixir-cost">${c.cost}</div><img src="${c.img}"><b>${c.name}</b>`;col.appendChild(d);});}
     renderDeck();renderCollection();
 
-    // Matchmaking
+    // --- Matchmaking (transaction-based) ---
     function findMatch(){
       document.getElementById("statusText").innerText="Searching...";
       document.getElementById("battleBtn").style.display="none";
       document.getElementById("cancelBtn").style.display="inline-block";
       searching=true;
       let queueRef=db.ref("queue");
+
       queueRef.transaction(current=>{
         if(!current){return {[playerId]:true};}
         else{let oppId=Object.keys(current)[0];roomId="room-"+Date.now();isHost=true;db.ref("rooms/"+roomId).set({players:{[playerId]:true,[oppId]:true}});return null;}
@@ -110,14 +121,19 @@
         if(err){console.error(err);cancelSearch();}
         else if(committed){
           let q=snap.val();
-          if(q && q[playerId]){db.ref("rooms").on("child_added",snap=>{if(!searching)return;let r=snap.val();if(r.players&&r.players[playerId]&&!roomId){roomId=snap.key;startBattle();}});}
-          else if(roomId){startBattle();}
+          if(q && q[playerId]){
+            db.ref("rooms").on("child_added",snap=>{
+              if(!searching)return;
+              let r=snap.val();
+              if(r.players && r.players[playerId] && !roomId){roomId=snap.key;startBattle();}
+            });
+          } else if(roomId){startBattle();}
         }
       });
     }
     function cancelSearch(){searching=false;db.ref("queue/"+playerId).remove();document.getElementById("statusText").innerText="Idle";document.getElementById("battleBtn").style.display="inline-block";document.getElementById("cancelBtn").style.display="none";}
 
-    // Battle
+    // --- Battle ---
     function startBattle(){
       searching=false;db.ref("queue/"+playerId).remove();
       document.getElementById("menuScreen").style.display="none";
@@ -129,15 +145,25 @@
       ctx=document.getElementById("battleCanvas").getContext("2d");
       initBattle();initDeck();
 
-      if(isHost){
-        loop=setInterval(updateBattleHost,200);
-      }
+      if(isHost){loop=setInterval(updateBattleHost,200);}
       db.ref("rooms/"+roomId+"/state").on("value",snap=>{
         let state=snap.val();if(!state)return;
         towers=state.towers||[];units=state.units||[];elixir=state.elixir||0;drawBattle();
       });
       document.getElementById("battleCanvas").addEventListener("click",e=>{
-        if(!selectedCard)return;let rect=e.target.getBoundingClientRect();let y=e.clientY-rect.top;let lane=y<250?"top":"bot";if(elixir>=selectedCard.cost){sendAction(selectedCard,lane);cycleHand(selectedCard);selectedCard=null;}});
+        if(!selectedCard)return;
+        let rect=e.target.getBoundingClientRect();
+        let x=e.clientX-rect.left;
+        let lane;
+        if(x<325)lane="top";
+        else if(x<475)lane="mid";
+        else lane="bot";
+        if(elixir>=selectedCard.cost){
+          sendAction(selectedCard,lane);
+          cycleHand(selectedCard);
+          selectedCard=null;
+        }
+      });
       db.ref("rooms/"+roomId+"/actions").on("child_added",snap=>{
         let a=snap.val();if(a&&isHost){applyAction(a);}});
     }
@@ -145,21 +171,69 @@
     function sendAction(card,lane){db.ref("rooms/"+roomId+"/actions").push({card,player:playerId,lane,timestamp:Date.now()});}
 
     function initBattle(){
-      towers=[{x:100,y:250,hp:600,color:"blue",lane:"king"},{x:650,y:150,hp:300,color:"red",lane:"top"},{x:650,y:350,hp:300,color:"red",lane:"bot"},{x:750,y:250,hp:600,color:"red",lane:"king"}];units=[];elixir=5;
+      towers=[{x:250,y:50,hp:300,color:"blue",lane:"top"},{x:400,y:50,hp:300,color:"blue",lane:"mid"},{x:550,y:50,hp:300,color:"blue",lane:"bot"},
+              {x:250,y:650,hp:300,color:"red",lane:"top"},{x:400,y:650,hp:300,color:"red",lane:"mid"},{x:550,y:650,hp:300,color:"red",lane:"bot"}];
+      units=[];elixir=5;
       if(isHost)db.ref("rooms/"+roomId+"/state").set({towers,units,elixir});
     }
 
     function applyAction(a){spawnUnit(a.card,a.player===playerId?"ally":"enemy",a.lane);}
-    function spawnUnit(card,side,lane){let dir=side==="ally"?1:-1;let color=side==="ally"?"blue":"red";let x=side==="ally"?150:650;let y=lane==="top"?150:350;units.push({name:card.name,x,y,hp:card.hp,dmg:card.dmg,range:card.range,dir,color,cooldown:0,lane});}
+    function spawnUnit(card,side,lane){
+      let dir=side==="ally"?1:-1;
+      let color=side==="ally"?"blue":"red";
+      let y=side==="ally"?100:600;
+      let x=(lane==="top")?250:(lane==="mid")?400:550;
+      let img=new Image();img.src=card.img;
+      units.push({id:Date.now()+"-"+Math.random(),name:card.name,x,y,hp:card.hp,maxHp:card.hp,dmg:card.dmg,range:card.range,dir,color,cooldown:0,lane,sprite:img,animOffset:0});
+    }
 
     function updateBattleHost(){
       elixir=Math.min(elixir+0.1,10);
-      units.forEach(u=>{let enemies=units.filter(e=>e.color!==u.color&&e.lane===u.lane);let target=enemies.find(e=>Math.abs(e.x-u.x)<u.range);if(target){if(u.cooldown<=0){target.hp-=u.dmg;u.cooldown=20;}}else{u.x+=u.dir*2;}if(u.cooldown>0)u.cooldown--;towers.forEach(t=>{if(t.color!==u.color&&t.lane===u.lane&&Math.abs(u.x-t.x)<30){t.hp-=u.dmg;u.hp=0;if(t.hp<=0&&t.lane==="king"){alert((u.color==="blue"?"Blue":"Red")+" wins!");clearInterval(loop);}}});});units=units.filter(u=>u.hp>0);
+      units.forEach(u=>{
+        // walking animation bobbing
+        u.animOffset=Math.sin(Date.now()/150)*3;
+        u.y+=u.dir*2;
+        let enemies=units.filter(e=>e.color!==u.color&&e.lane===u.lane);
+        let target=enemies.find(e=>Math.abs(e.y-u.y)<u.range);
+        if(target){if(u.cooldown<=0){target.hp-=u.dmg;u.cooldown=20;}}
+        if(u.cooldown>0)u.cooldown--;
+        towers.forEach(t=>{
+          if(t.color!==u.color&&t.lane===u.lane&&Math.abs(u.y-t.y)<40){
+            t.hp-=u.dmg;u.hp=0;
+            if(t.hp<=0&&t.color==="red"){alert("Blue wins!");clearInterval(loop);}
+            if(t.hp<=0&&t.color==="blue"){alert("Red wins!");clearInterval(loop);}
+          }
+        });
+      });
+      units=units.filter(u=>u.hp>0);
       db.ref("rooms/"+roomId+"/state").set({towers,units,elixir});
     }
 
-    function drawBattle(){ctx.clearRect(0,0,800,500);document.getElementById("elixirFill").style.width=(elixir*10)+"%";ctx.strokeStyle="gray";ctx.beginPath();ctx.moveTo(0,250);ctx.lineTo(800,250);ctx.stroke();towers.forEach(t=>{ctx.fillStyle=t.color;ctx.fillRect(t.x-20,t.y-30,40,60);ctx.fillStyle="white";ctx.fillText("HP:"+t.hp,t.x-20,t.y-40);});units.forEach(u=>{ctx.fillStyle=u.color;ctx.beginPath();ctx.arc(u.x,u.y,10,0,Math.PI*2);ctx.fill();});}
+    function drawBattle(){
+      ctx.clearRect(0,0,800,700);
+      document.getElementById("elixirFill").style.width=(elixir*10)+"%";
+      // lane lines
+      ctx.strokeStyle="gray";ctx.beginPath();
+      ctx.moveTo(325,0);ctx.lineTo(325,700);
+      ctx.moveTo(475,0);ctx.lineTo(475,700);
+      ctx.stroke();
+      // towers
+      towers.forEach(t=>{
+        ctx.fillStyle=t.color;ctx.fillRect(t.x-25,t.y-25,50,50);
+        ctx.fillStyle="white";ctx.fillText("HP:"+t.hp,t.x-20,t.y-40);
+      });
+      // units
+      units.forEach(u=>{
+        if(u.sprite.complete){ctx.drawImage(u.sprite,u.x-20,u.y-20+u.animOffset,40,40);}
+        else{ctx.fillStyle=u.color;ctx.beginPath();ctx.arc(u.x,u.y,12,0,Math.PI*2);ctx.fill();}
+        // health bar
+        let barWidth=40;let hpPercent=Math.max(u.hp,0)/u.maxHp;
+        ctx.fillStyle="red";ctx.fillRect(u.x-20,u.y-30,barWidth,5);
+        ctx.fillStyle="lime";ctx.fillRect(u.x-20,u.y-30,barWidth*hpPercent,5);
+      });
+    }
 
+    // --- Deck & Hand ---
     function initDeck(){drawPile=[...deck];hand=drawPile.splice(0,4);renderHand();}
     function renderHand(){let bar=document.getElementById("cardBar");bar.innerHTML="";hand.forEach(c=>{let d=document.createElement("div");d.className="card";d.innerHTML=`<div class="elixir-cost">${c.cost}</div><img src="${c.img}"><b>${c.name}</b>`;d.onclick=()=>{selectedCard=c;};bar.appendChild(d);});}
     function cycleHand(card){let i=hand.indexOf(card);if(i>-1){hand.splice(i,1);if(drawPile.length>0)hand.push(drawPile.shift());}renderHand();}
