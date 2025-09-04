@@ -4,28 +4,21 @@
   <meta charset="UTF-8">
   <title>Flash Royale</title>
   <style>
-    body { margin:0; font-family:Arial; background:#222; color:white; text-align:center; }
-    #menu, #gameCanvas, #charScreen, #deckScreen { display:none; }
+    body { margin:0; font-family:Arial; background:#111; color:white; text-align:center; }
+    #menu, #deckScreen, #gameCanvas, #cardBar { display:none; }
     button { padding:10px 20px; margin:10px; font-size:18px; cursor:pointer; border:none; border-radius:8px; }
     #gameCanvas { background:#333; display:block; margin:20px auto; border:3px solid #fff; }
     #cardBar { position:absolute; bottom:20px; left:50%; transform:translateX(-50%); display:flex; gap:10px; }
-    .card { width:100px; height:140px; background:#555; border:2px solid #fff; border-radius:8px; color:white; font-size:14px; display:flex; flex-direction:column; justify-content:center; align-items:center; cursor:pointer; }
+    .card { width:100px; height:140px; background:#444; border:2px solid #fff; border-radius:8px; color:white; font-size:14px; display:flex; flex-direction:column; justify-content:center; align-items:center; cursor:pointer; }
   </style>
 </head>
 <body>
-
   <h1>⚡ Flash Royale ⚡</h1>
 
   <div id="menu">
     <button onclick="goToDeck()">🃏 Build Deck</button>
-    <button onclick="startGame()">▶ Play</button>
-    <button onclick="showCharacters()">👥 Characters</button>
-  </div>
-
-  <div id="charScreen">
-    <h2>Characters</h2>
-    <ul id="charList"></ul>
-    <button onclick="backToMenu()">⬅ Back</button>
+    <button onclick="startGame(false)">▶ Local Test</button>
+    <button onclick="startGame(true)">🌐 Online Match</button>
   </div>
 
   <div id="deckScreen">
@@ -41,188 +34,155 @@
   <button id="exitBtn" style="display:none" onclick="exitGame()">⬅ Exit</button>
 
   <script>
-    // Character Data
+    // --- Characters ---
     const characters = [
-      {name:"Blade Knight", hp:200, dmg:25, cost:3, type:"melee"},
-      {name:"Storm Archer", hp:120, dmg:20, cost:3, type:"ranged"},
-      {name:"Inferno Drake", hp:180, dmg:40, cost:5, type:"flying"},
-      {name:"Rock Golem", hp:350, dmg:15, cost:4, type:"tank"},
-      {name:"Shadow Rogue", hp:100, dmg:30, cost:2, type:"fast"},
-      {name:"Frost Mage", hp:140, dmg:15, cost:4, type:"magic"},
-      {name:"Fire Bomb", hp:0, dmg:50, cost:4, type:"spell"},
-      {name:"Lightning Bolt", hp:0, dmg:70, cost:6, type:"spell"}
+      {name:"Blade Knight", hp:200, dmg:25, cost:3, type:"melee", range:20},
+      {name:"Storm Archer", hp:120, dmg:20, cost:3, type:"ranged", range:120},
+      {name:"Inferno Drake", hp:180, dmg:40, cost:5, type:"ranged", range:100},
+      {name:"Rock Golem", hp:350, dmg:15, cost:4, type:"melee", range:20},
+      {name:"Shadow Rogue", hp:100, dmg:30, cost:2, type:"fast", range:20},
+      {name:"Frost Mage", hp:140, dmg:15, cost:4, type:"ranged", range:90, effect:"slow"},
+      {name:"Fire Bomb", hp:0, dmg:60, cost:4, type:"spell", aoe:60},
+      {name:"Lightning Bolt", hp:0, dmg:100, cost:6, type:"spell", aoe:0}
     ];
 
-    let deck = [];          // selected 8 cards
-    let drawPile = [];      // shuffled deck cycle
-    let hand = [];          // 4 active cards
-    let towers, units, elixir, gameLoop;
+    let deck=[], drawPile=[], hand=[], towers, units, elixir, gameLoop, socket, online=false, playerId, enemyId;
 
-    const menu = document.getElementById("menu");
-    const charScreen = document.getElementById("charScreen");
-    const charList = document.getElementById("charList");
-    const deckScreen = document.getElementById("deckScreen");
-    const allCardsDiv = document.getElementById("allCards");
-    const deckDiv = document.getElementById("deck");
-    const gameCanvas = document.getElementById("gameCanvas");
-    const ctx = gameCanvas.getContext("2d");
-    const cardBar = document.getElementById("cardBar");
+    const menu=document.getElementById("menu");
+    const deckScreen=document.getElementById("deckScreen");
+    const allCardsDiv=document.getElementById("allCards");
+    const deckDiv=document.getElementById("deck");
+    const gameCanvas=document.getElementById("gameCanvas");
+    const ctx=gameCanvas.getContext("2d");
+    const cardBar=document.getElementById("cardBar");
 
-    window.onload = () => { menu.style.display="block"; };
+    window.onload=()=>{ menu.style.display="block"; };
 
-    // Characters
-    function showCharacters(){
-      menu.style.display="none";
-      charScreen.style.display="block";
-      charList.innerHTML="";
-      characters.forEach(c=>{
-        let li=document.createElement("li");
-        li.textContent = `${c.name} (${c.type}) Cost:${c.cost} HP:${c.hp} DMG:${c.dmg}`;
-        charList.appendChild(li);
-      });
-    }
-    function backToMenu(){
-      charScreen.style.display="none";
-      deckScreen.style.display="none";
-      menu.style.display="block";
-    }
-
-    // Deck Builder
+    // --- Deck Builder ---
     function goToDeck(){
       menu.style.display="none";
       deckScreen.style.display="block";
       renderDeckBuilder();
     }
-
     function renderDeckBuilder(){
-      allCardsDiv.innerHTML="";
-      deckDiv.innerHTML="";
-      characters.forEach((c,i)=>{
+      allCardsDiv.innerHTML=""; deckDiv.innerHTML="";
+      characters.forEach(c=>{
         let btn=document.createElement("button");
         btn.textContent=`${c.name} (Cost:${c.cost})`;
         btn.onclick=()=>{ if(deck.length<8){ deck.push(c); renderDeckBuilder(); }};
         allCardsDiv.appendChild(btn);
       });
-      deck.forEach((c,i)=>{
-        let span=document.createElement("span");
-        span.textContent=c.name+" | ";
-        deckDiv.appendChild(span);
-      });
+      deck.forEach(c=>{ let span=document.createElement("span"); span.textContent=c.name+" | "; deckDiv.appendChild(span); });
     }
+    function backToMenu(){ deckScreen.style.display="none"; menu.style.display="block"; }
 
-    // Game
-    function startGame(){
-      if(deck.length<8){ alert("You must pick 8 cards first!"); return; }
-      menu.style.display="none";
-      deckScreen.style.display="none";
-      gameCanvas.style.display="block";
-      cardBar.style.display="flex";
+    // --- Game ---
+    function startGame(useOnline){
+      if(deck.length<8){ alert("Pick 8 cards first!"); return; }
+      online=useOnline;
+      menu.style.display="none"; deckScreen.style.display="none";
+      gameCanvas.style.display="block"; cardBar.style.display="flex";
       document.getElementById("exitBtn").style.display="inline-block";
 
-      // Init
-      towers = [
-        {x:100, y:200, hp:300, color:"blue"},
-        {x:650, y:200, hp:300, color:"red"}
+      towers=[
+        {x:100,y:200,hp:500,color:"blue",atk:20,range:100},
+        {x:650,y:200,hp:500,color:"red",atk:20,range:100}
       ];
-      units = [];
-      elixir=5;
+      units=[]; elixir=5; drawPile=[...deck]; hand=drawPile.splice(0,4); renderHand();
 
-      // Shuffle deck
-      drawPile=[...deck];
-      hand = drawPile.splice(0,4);
-      renderHand();
+      if(online) initSocket();
 
-      gameLoop = setInterval(update, 50);
+      gameLoop=setInterval(update,50);
     }
 
     function update(){
       ctx.clearRect(0,0,800,500);
-
-      // Elixir bar
-      elixir = Math.min(elixir+0.05,10);
-      ctx.fillStyle="purple";
-      ctx.fillRect(10,10,elixir*20,20);
-      ctx.strokeStyle="white";
-      ctx.strokeRect(10,10,200,20);
-      ctx.fillStyle="white";
-      ctx.fillText("Elixir: "+Math.floor(elixir), 220,25);
+      // Elixir
+      elixir=Math.min(elixir+0.05,10);
+      ctx.fillStyle="purple"; ctx.fillRect(10,10,elixir*20,20);
+      ctx.strokeStyle="white"; ctx.strokeRect(10,10,200,20);
+      ctx.fillStyle="white"; ctx.fillText("Elixir:"+Math.floor(elixir),220,25);
 
       // Towers
       towers.forEach(t=>{
-        ctx.fillStyle=t.color;
-        ctx.fillRect(t.x,t.y,40,100);
-        ctx.fillStyle="white";
-        ctx.fillText("HP:"+t.hp, t.x, t.y-10);
+        ctx.fillStyle=t.color; ctx.fillRect(t.x,t.y,40,100);
+        ctx.fillStyle="white"; ctx.fillText("HP:"+t.hp,t.x,t.y-10);
       });
 
       // Units
       units.forEach(u=>{
         ctx.fillStyle=u.color;
-        ctx.beginPath();
-        ctx.arc(u.x,u.y,10,0,Math.PI*2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(u.x,u.y,10,0,Math.PI*2); ctx.fill();
 
-        u.x += u.dir*2;
-        let target = towers[u.dir===1?1:0];
-        if(Math.abs(u.x-target.x)<30){
-          target.hp -= u.dmg;
-          u.dead=true;
-          if(target.hp<=0){
-            alert((u.color==="blue"?"Player":"Enemy")+" wins!");
-            exitGame();
-          }
-        }
+        // Find target (enemy tower or unit)
+        let enemies=units.filter(e=>e.color!==u.color);
+        let target=enemies.find(e=>Math.abs(e.x-u.x)<u.range) || towers[u.color==="blue"?1:0];
+
+        if(target && target.hp>0 && Math.abs(u.x-target.x)<u.range){
+          if(!u.cooldown){ target.hp-=u.dmg; u.cooldown=20; }
+        } else { u.x+=u.dir*2; }
+
+        if(u.cooldown) u.cooldown--;
+        if(target && target.hp<=0){ checkWin(); }
       });
-      units = units.filter(u=>!u.dead);
-    }
+      units=units.filter(u=>u.hp>0);
 
-    // Play card
-    function renderHand(){
-      cardBar.innerHTML="";
-      hand.forEach((c,i)=>{
-        let card=document.createElement("div");
-        card.className="card";
-        card.innerHTML=`<b>${c.name}</b><br>Cost:${c.cost}<br>DMG:${c.dmg}`;
-        card.onclick=()=>playCard(i);
-        cardBar.appendChild(card);
+      // Tower auto-attack
+      towers.forEach(t=>{
+        let enemies=units.filter(e=>e.color!==t.color && Math.abs(e.x-t.x)<t.range);
+        if(enemies[0]) enemies[0].hp-=t.atk;
       });
     }
 
     function playCard(index){
-      let c = hand[index];
-      if(elixir>=c.cost){
-        elixir -= c.cost;
-
-        if(c.type==="spell"){
-          let target = towers[1]; // spells hit enemy tower
-          target.hp -= c.dmg;
-          if(target.hp<=0){
-            alert("Player wins with a spell!");
-            exitGame();
-          }
-        }else{
-          spawnUnit("blue",1,c.dmg);
-        }
-
-        // Cycle card
-        drawPile.push(c);
-        hand.splice(index,1);
-        if(drawPile.length>0) hand.push(drawPile.shift());
-        renderHand();
-      }
+      let c=hand[index]; if(elixir<c.cost) return; elixir-=c.cost;
+      if(c.type==="spell"){ castSpell(c); } else { spawnUnit("blue",1,c); }
+      drawPile.push(c); hand.splice(index,1); if(drawPile.length>0) hand.push(drawPile.shift()); renderHand();
+      if(online) sendAction({type:"playCard",card:c});
     }
 
-    function spawnUnit(color,dir,dmg){
-      units.push({x:color==="blue"?150:650, y:250, dir:dir, color:color, dmg:dmg, dead:false});
+    function castSpell(card){
+      let target=towers[1]; if(card.aoe){ target.hp-=card.dmg; } else { target.hp-=card.dmg; }
+      if(target.hp<=0) checkWin();
+    }
+
+    function spawnUnit(color,dir,card){
+      units.push({x:color==="blue"?150:650,y:250,hp:card.hp,dmg:card.dmg,range:card.range||20,color,dir,cooldown:0});
+    }
+
+    function renderHand(){
+      cardBar.innerHTML="";
+      hand.forEach((c,i)=>{
+        let card=document.createElement("div");
+        card.className="card"; card.innerHTML=`<b>${c.name}</b><br>Cost:${c.cost}`;
+        card.onclick=()=>playCard(i); cardBar.appendChild(card);
+      });
+    }
+
+    function checkWin(){
+      if(towers[0].hp<=0||towers[1].hp<=0){
+        alert(towers[0].hp<=0?"Enemy wins!":"You win!");
+        exitGame();
+      }
     }
 
     function exitGame(){
       clearInterval(gameLoop);
-      gameCanvas.style.display="none";
-      cardBar.style.display="none";
-      document.getElementById("exitBtn").style.display="none";
-      menu.style.display="block";
+      gameCanvas.style.display="none"; cardBar.style.display="none";
+      document.getElementById("exitBtn").style.display="none"; menu.style.display="block";
+      if(socket) socket.close();
     }
+
+    // --- Multiplayer (WebSockets placeholder) ---
+    function initSocket(){
+      socket=new WebSocket("wss://your-server.glitch.me"); // replace with your server
+      socket.onopen=()=>{ console.log("Connected!"); socket.send(JSON.stringify({type:"join"})); };
+      socket.onmessage=(msg)=>{
+        let data=JSON.parse(msg.data);
+        if(data.type==="action"){ if(data.card) spawnUnit("red",-1,data.card); }
+      };
+    }
+    function sendAction(action){ if(socket&&socket.readyState===1) socket.send(JSON.stringify(action)); }
   </script>
 </body>
 </html>
