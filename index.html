@@ -133,7 +133,7 @@
   </div>
 
   <script>
-    // (Firebase + all previous code stays the same...)
+    // (Firebase + game logic ... unchanged)
 
     function startBattle(){
       searching=false;db.ref("queue/"+playerId).remove();
@@ -141,22 +141,20 @@
       document.getElementById("battleScreen").style.display="block";
       document.getElementById("cardBar").style.display="flex";
       document.getElementById("elixirBar").style.display="flex";
-      document.getElementById("arenaBackground").style.display="block";
-      document.body.style.background = "black"; // REMOVE menu background
+      document.getElementById("arenaBackground").style.display="block"; // show arena
       document.getElementById("statusText").innerText="In Battle";
-      // ...rest of startBattle
+      // ... rest of battle init
     }
 
     function returnToMenu(){
       document.getElementById("resultScreen").style.display="none";
       document.getElementById("battleScreen").style.display="none";
       document.getElementById("menuScreen").style.display="block";
-      document.getElementById("arenaBackground").style.display="none";
+      document.getElementById("arenaBackground").style.display="none"; // hide arena
       document.getElementById("cardBar").style.display="none";
       document.getElementById("elixirBar").style.display="none";
       document.getElementById("statusText").innerText="Idle";
-      document.body.style.background = "url('menu-bg.png') no-repeat center center fixed";
-      document.body.style.backgroundSize = "cover"; // RESTORE menu background
+      // body background stays menu-bg.png, no changes needed
     }
   </script>
 </body>
