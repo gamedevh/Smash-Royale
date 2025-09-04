@@ -150,10 +150,23 @@
     const playerRef=db.ref("players/"+playerId);
     playerRef.once("value").then(snap=>{
       if(!snap.exists()){
-        playerRef.set({name:playerName,online:true,coins:0,trophies:0});
-      } else { playerRef.update({online:true}); }
+        playerRef.set({name:playerName,online:true,coins:0,trophies:0,disconnected:false});
+      } else {
+        let data=snap.val();
+        if(data.disconnected){
+          db.ref("rooms").once("value").then(roomsSnap=>{
+            roomsSnap.forEach(r=>{
+              if(r.val().players && r.val().players[playerId]){
+                roomId=r.key;
+                startBattle(); // resume
+              }
+            });
+          });
+        }
+        playerRef.update({online:true,disconnected:false});
+      }
     });
-    window.addEventListener("beforeunload",()=>{playerRef.update({online:false});});
+    window.addEventListener("beforeunload",()=>{playerRef.update({disconnected:true,online:false});});
 
     // Online counter
     db.ref("players").on("value",snap=>{
@@ -179,6 +192,20 @@
     }
     renderDeck();
 
+    function renderHand(){
+      let bar=document.getElementById("cardBar");bar.innerHTML="";
+      deck.forEach(c=>{
+        let d=document.createElement("div");d.className="card";
+        d.innerHTML=`<div class="elixir-cost">${c.cost}</div><img src="${c.img}"><b>${c.name}</b>`;
+        d.onclick=()=>{ selectedCard=c; highlightSelected(d); };
+        bar.appendChild(d);
+      });
+    }
+    function highlightSelected(cardEl){
+      document.querySelectorAll("#cardBar .card").forEach(c=>c.classList.remove("selected"));
+      cardEl.classList.add("selected");
+    }
+
     // Elixir
     let elixir=0,maxElixir=10,elixirRegenRate=2000,lastElixirTime=Date.now();
     function initElixirBar(){let bar=document.getElementById("elixirBar");bar.innerHTML="";for(let i=0;i<maxElixir;i++){let seg=document.createElement("div");seg.className="elixir-segment";seg.id="elixir-"+i;bar.appendChild(seg);}}
@@ -187,7 +214,7 @@
 
     // Matchmaking
     let roomId=null,isHost=false,searching=false;
-    function findMatch(){document.getElementById("statusText").innerText="Searching...";document.getElementById("battleBtn").style.display="none";document.getElementById("cancelBtn").style.display="inline-block";searching=true;let qRef=db.ref("queue");qRef.once("value").then(snap=>{let q=snap.val();if(q){let oppId=Object.keys(q)[0];roomId="room-"+Date.now();isHost=true;db.ref("rooms/"+roomId).set({players:{[playerId]:true,[oppId]:true}});db.ref("queue/"+oppId).remove();startBattle();}else{db.ref("queue/"+playerId).set(true);db.ref("rooms").on("child_added",snap=>{if(!searching)return;let r=snap.val();if(r.players&&r.players[playerId]&&!roomId){roomId=snap.key;startBattle();}});}});}
+    function findMatch(){document.getElementById("statusText").innerText="Searching...";document.getElementById("battleBtn").style.display="none";document.getElementById("cancelBtn").style.display="inline-block";searching=true;let qRef=db.ref("queue");qRef.once("value").then(snap=>{let q=snap.val();if(q){let oppId=Object.keys(q)[0];roomId="room-"+Date.now();isHost=true;db.ref("rooms/"+roomId).set({players:{[playerId]:{connected:true},[oppId]:{connected:true}}});db.ref("queue/"+oppId).remove();startBattle();}else{db.ref("queue/"+playerId).set(true);db.ref("rooms").on("child_added",snap=>{if(!searching)return;let r=snap.val();if(r.players&&r.players[playerId]&&!roomId){roomId=snap.key;startBattle();}});}});}
     function cancelSearch(){searching=false;db.ref("queue/"+playerId).remove();document.getElementById("statusText").innerText="Idle";document.getElementById("battleBtn").style.display="inline-block";document.getElementById("cancelBtn").style.display="none";}
 
     // Battle
@@ -202,28 +229,32 @@
       document.getElementById("elixirBar").style.display="flex";
       document.getElementById("arenaBackground").style.display="block";
       document.getElementById("statusText").innerText="In Battle";
-      elixir=5;lastElixirTime=Date.now();initElixirBar();
-      towers=[
-        {x:150,y:550,hp:600,side:"blue",king:false},
-        {x:650,y:550,hp:600,side:"blue",king:false},
-        {x:400,y:620,hp:1000,side:"blue",king:true},
-        {x:150,y:150,hp:600,side:"red",king:false},
-        {x:650,y:150,hp:600,side:"red",king:false},
-        {x:400,y:80,hp:1000,side:"red",king:true}
-      ];
+      elixir=5;lastElixirTime=Date.now();initElixirBar();renderHand();
+      towers=[{x:150,y:550,hp:600,side:"blue",king:false},{x:650,y:550,hp:600,side:"blue",king:false},{x:400,y:620,hp:1000,side:"blue",king:true},{x:150,y:150,hp:600,side:"red",king:false},{x:650,y:150,hp:600,side:"red",king:false},{x:400,y:80,hp:1000,side:"red",king:true}];
       requestAnimationFrame(drawBattle);
-      db.ref("rooms/"+roomId+"/players/"+playerId).set(true);
+      db.ref("rooms/"+roomId+"/players/"+playerId).update({connected:true});
+      // Listen for actions
+      db.ref("rooms/"+roomId+"/actions").on("child_added",snap=>{
+        let a=snap.val();
+        if(a.player!==playerId){spawnUnit(a.card,"red",a.x,a.y);}
+        else{spawnUnit(a.card,"blue",a.x,a.y);}
+      });
     }
 
-    function spawnUnit(card,side,x,y){
-      units.push({...card,side,x,y,hp:card.hp,maxHp:card.hp,cooldown:0,dir:(side==="blue"?-1:1)});
-    }
+    function spawnUnit(card,side,x,y){units.push({...card,side,x,y,hp:card.hp,maxHp:card.hp,cooldown:0,dir:(side==="blue"?-1:1)});}
 
+    // Drop card → send action
     canvas.addEventListener("click",e=>{
       if(!selectedCard)return;
       let rect=canvas.getBoundingClientRect();let x=e.clientX-rect.left;let y=e.clientY-rect.top;
       if(y<canvas.height/2)return;
-      if(elixir>=selectedCard.cost){spawnUnit(selectedCard,"blue",x,y);elixir-=selectedCard.cost;selectedCard=null;}
+      if(elixir>=selectedCard.cost){
+        elixir-=selectedCard.cost;
+        let action={player:playerId,card:selectedCard,x,y,timestamp:Date.now()};
+        db.ref("rooms/"+roomId+"/actions").push(action);
+        selectedCard=null;
+        document.querySelectorAll("#cardBar .card").forEach(c=>c.classList.remove("selected"));
+      }
     });
 
     function drawTower(t){if(towerImg.complete){ctx.drawImage(towerImg,t.x-25,t.y-25,50,50);}else{ctx.fillStyle=t.side==="blue"?"blue":"red";ctx.fillRect(t.x-20,t.y-20,40,40);}ctx.fillStyle="red";ctx.fillRect(t.x-20,t.y-35,40,5);ctx.fillStyle="lime";let hpWidth=Math.max(0,(t.hp/1000)*40);ctx.fillRect(t.x-20,t.y-35,hpWidth,5);}
