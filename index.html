@@ -12,22 +12,16 @@
       color: white;
       user-select: none;
       overflow: hidden;
+      background: url('menu-bg.png') no-repeat center center fixed;
+      background-size: cover;
     }
     .top-bar{display:flex;justify-content:space-between;align-items:center;padding:10px 20px;background:rgba(10,15,30,0.7);border-bottom:3px solid #1e3d59;font-size:14px;}
     .currency{display:flex;gap:15px;}
     .currency div{background:#2d3e50;padding:5px 12px;border-radius:8px;display:flex;align-items:center;gap:5px;}
+    #onlineCount { margin-left: 15px; font-weight: bold; }
     .screen{display:none;height:100vh;}
-    #menuScreen {
-      display: block;
-      text-align: center;
-      background: url('menu-bg.png') no-repeat center center;
-      background-size: cover;
-    }
-    #battleScreen {
-      text-align: center;
-      background: url('arena-bg.png') no-repeat center center;
-      background-size: cover;
-    }
+    #menuScreen { display: block; text-align: center; }
+    #battleScreen { text-align: center; display:none; }
     .battle-btn{background:#ffcc00;padding:20px 60px;border-radius:20px;font-size:32px;color:black;cursor:pointer;margin-top:20px;border:3px solid #fff;box-shadow:0 0 25px rgba(255,255,0,0.9);}
     .cancel-btn{background:#ff4444;padding:15px 40px;border-radius:15px;font-size:24px;color:white;cursor:pointer;margin-top:20px;border:3px solid #fff;box-shadow:0 0 20px rgba(255,0,0,0.7);display:none;}
     .deck,#shop{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px auto;max-width:400px;}
@@ -43,7 +37,23 @@
       display: flex; align-items: center; justify-content: center;
       font-size: 20px; font-weight: bold; color: white;
     }
-    #battleCanvas{position:relative;background:transparent;border:3px solid white;margin-top:20px;display:block;margin-left:auto;margin-right:auto;}
+    #battleCanvas {
+      position: relative;
+      background: transparent;
+      border: 3px solid white;
+      margin-top: 20px;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    #arenaBackground {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: -1;
+    }
     #cardBar{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);display:flex;gap:10px;display:none;}
     #elixirBar {
       position: fixed;
@@ -55,19 +65,12 @@
       border: 2px solid white;
       border-radius: 10px;
       background: #222;
-      display: none; /* hidden until battle */
+      display: none;
       justify-content: space-between;
       padding: 2px;
     }
-    .elixir-segment {
-      flex: 1;
-      margin: 0 1px;
-      background: #444;
-      border-radius: 4px;
-    }
-    .elixir-filled {
-      background: purple;
-    }
+    .elixir-segment { flex: 1; margin: 0 1px; background: #444; border-radius: 4px; }
+    .elixir-filled { background: purple; }
   </style>
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -78,7 +81,10 @@
     <div class="currency">
       <div><img src="https://img.icons8.com/emoji/48/000000/coin-emoji.png"/> <span id="coinCount">0</span></div>
     </div>
-    <div id="statusText">Idle</div>
+    <div>
+      <span id="statusText">Idle</span>
+      <span id="onlineCount">Online: 0</span>
+    </div>
   </div>
 
   <!-- Menu -->
@@ -94,6 +100,7 @@
 
   <!-- Battle -->
   <div id="battleScreen" class="screen">
+    <img id="arenaBackground" src="arena-bg.png" width="800" height="700"/>
     <canvas id="battleCanvas" width="800" height="700"></canvas>
   </div>
   <div id="cardBar"></div>
@@ -106,63 +113,27 @@
     const db=firebase.database();
 
     // --- Name + Player ---
-    function sanitizeName(name){
-      const badWords=["badword1","badword2"];
-      let clean=name.replace(/[^a-zA-Z0-9]/g,"");
-      if(badWords.some(w=>clean.toLowerCase().includes(w))) clean="***";
-      return clean.substring(0,6);
-    }
     let playerId=localStorage.getItem("playerId");
     let playerName=localStorage.getItem("playerName");
+    function sanitizeName(name){return name.replace(/[^a-zA-Z0-9]/g,"").substring(0,6);}
     if(!playerId){playerId="player-"+Math.floor(Math.random()*10000);localStorage.setItem("playerId",playerId);}
-    if(!playerName){
-      playerName=prompt("Enter your player name (max 6 chars):","");
-      playerName=sanitizeName(playerName||"Anon");
-      localStorage.setItem("playerName",playerName);
-    }
+    if(!playerName){playerName=sanitizeName(prompt("Enter your player name (max 6 chars):","")||"Anon");localStorage.setItem("playerName",playerName);}
     document.getElementById("playerNameLabel").innerText=playerName;
 
-    let coins=0,trophies=0,ownedCards=["Knight"];
     const playerRef=db.ref("players/"+playerId);
-    playerRef.once("value").then(snap=>{
-      if(!snap.exists()){
-        playerRef.set({name:playerName,coins:0,trophies:0,ownedCards:["Knight"]});
-      }
-    });
-    playerRef.on("value",snap=>{
-      if(snap.exists()){
-        let d=snap.val();
-        coins=d.coins||0;trophies=d.trophies||0;ownedCards=d.ownedCards||["Knight"];
-        document.getElementById("coinCount").innerText=coins;
-        document.getElementById("trophies").innerText=trophies;
-        renderDeck();renderShop();
-      }
+    playerRef.set({name:playerName,online:true,coins:0,trophies:0,ownedCards:["Knight"]});
+    window.addEventListener("beforeunload",()=>{playerRef.update({online:false});});
+
+    // online counter
+    db.ref("players").on("value",snap=>{
+      let online=0;
+      snap.forEach(child=>{if(child.val().online) online++;});
+      document.getElementById("onlineCount").innerText="Online: "+online;
     });
 
     // --- Cards ---
-    let allCards=[
-      {name:"Knight",hp:200,dmg:20,range:20,cost:3,img:"https://img.icons8.com/color/96/knight.png",price:0},
-      {name:"Archer",hp:120,dmg:15,range:120,cost:3,img:"https://img.icons8.com/color/96/bow.png",price:150},
-      {name:"Golem",hp:300,dmg:10,range:30,cost:5,img:"https://img.icons8.com/color/96/rock.png",price:200},
-      {name:"Dragon",hp:150,dmg:30,range:80,cost:4,img:"https://img.icons8.com/color/96/dragon.png",price:300}
-    ];
-    function renderDeck(){let deckEl=document.getElementById("deck");deckEl.innerHTML="";ownedCards.forEach(cn=>{let c=allCards.find(x=>x.name===cn);if(c){let d=document.createElement("div");d.className="card";d.innerHTML=`<div class="elixir-cost">${c.cost}</div><img src="${c.img}"><b>${c.name}</b>`;deckEl.appendChild(d);}});}
-    function renderShop(){let shop=document.getElementById("shop");shop.innerHTML="";allCards.forEach(c=>{if(!ownedCards.includes(c.name)&&c.price>0){let d=document.createElement("div");d.className="card";d.innerHTML=`<img src="${c.img}"><b>${c.name}</b><br>💰 ${c.price}`;d.onclick=()=>{if(coins>=c.price){coins-=c.price;ownedCards.push(c.name);playerRef.update({coins:coins,ownedCards:ownedCards});}};shop.appendChild(d);}});}
-
-    // --- Deck / Hand ---
-    let hand=[],drawPile=[],selectedCard=null;
-    let cardCooldowns={};
-    function initDeck(){drawPile=[...ownedCards.map(cn=>allCards.find(x=>x.name===cn))];hand=drawPile.splice(0,4);renderHand();}
-    function renderHand(){let bar=document.getElementById("cardBar");bar.innerHTML="";hand.forEach(c=>{let d=document.createElement("div");d.className="card";let cdRemaining=0;if(cardCooldowns[c.name]&&Date.now()<cardCooldowns[c.name]){cdRemaining=Math.ceil((cardCooldowns[c.name]-Date.now())/1000);}d.innerHTML=`<div class="elixir-cost">${c.cost}</div><img src="${c.img}"><b>${c.name}</b>${cdRemaining>0?`<div class="cooldown-overlay">${cdRemaining}</div>`:""}`;if(cdRemaining>0){d.style.opacity=0.5;}else{d.onclick=()=>{selectedCard=c;renderHand();d.classList.add("selected");};}bar.appendChild(d);});}
-    function cycleHand(card){let i=hand.indexOf(card);if(i>-1){hand.splice(i,1);if(drawPile.length>0)hand.push(drawPile.shift());}renderHand();}
-
-    // --- Elixir ---
-    let elixir=0,maxElixir=10,elixirRegenRate=2000,lastElixirTime=Date.now();
-    function initElixirBar(){let bar=document.getElementById("elixirBar");bar.innerHTML="";for(let i=0;i<maxElixir;i++){let seg=document.createElement("div");seg.className="elixir-segment";seg.id="elixir-"+i;bar.appendChild(seg);}}
-    initElixirBar();
-    function updateElixir(){let now=Date.now();if(now-lastElixirTime>=elixirRegenRate&&elixir<maxElixir){elixir++;lastElixirTime=now;}for(let i=0;i<maxElixir;i++){let seg=document.getElementById("elixir-"+i);if(i<elixir){seg.classList.add("elixir-filled");}else{seg.classList.remove("elixir-filled");}}}
-    setInterval(updateElixir,500);
-    setInterval(()=>{renderHand();},1000);
+    let coins=0,trophies=0,ownedCards=["Knight"];
+    let allCards=[{name:"Knight",hp:200,dmg:20,range:20,cost:3,img:"https://img.icons8.com/color/96/knight.png",price:0}];
 
     // --- Matchmaking ---
     let roomId=null,isHost=false,searching=false;
@@ -197,25 +168,6 @@
 
     // --- Battle ---
     let canvas=document.getElementById("battleCanvas"),ctx=canvas.getContext("2d");
-    let placementCircle=null;
-
-    canvas.addEventListener("mousemove",(e)=>{
-      if(!selectedCard){placementCircle=null;return;}
-      let rect=canvas.getBoundingClientRect();
-      let x=e.clientX-rect.left,y=e.clientY-rect.top;
-      if(y>=canvas.height/2){placementCircle={x,y};}else{placementCircle=null;}
-    });
-
-    canvas.addEventListener("click",(e)=>{
-      if(!selectedCard) return;
-      let rect=canvas.getBoundingClientRect();
-      let x=e.clientX-rect.left,y=e.clientY-rect.top;
-      if(y<canvas.height/2) return;
-      let lane="mid"; if(y<canvas.height*0.33) lane="top"; else if(y>canvas.height*0.66) lane="bot";
-      let cost=Math.max(1,selectedCard.cost+(Math.floor(Math.random()*3)-1));
-      if(elixir>=cost){sendAction(selectedCard,lane);cycleHand(selectedCard);selectedCard=null;}
-    });
-
     function startBattle(){
       searching=false;
       db.ref("queue/"+playerId).remove();
@@ -223,27 +175,17 @@
       document.getElementById("battleScreen").style.display="block";
       document.getElementById("cardBar").style.display="flex";
       document.getElementById("elixirBar").style.display="flex";
+      document.getElementById("arenaBackground").style.display="block";
       document.getElementById("statusText").innerText="In Battle";
-      document.getElementById("cancelBtn").style.display="none";
-      initDeck();
-      requestAnimationFrame(drawBattle);
-    }
 
-    function drawBattle(){
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      // draw placement circle
-      if(placementCircle){ctx.strokeStyle="white";ctx.beginPath();ctx.arc(placementCircle.x,placementCircle.y,25,0,Math.PI*2);ctx.stroke();}
-      requestAnimationFrame(drawBattle);
-    }
-
-    function sendAction(card,lane){
-      let cost=Math.max(1,card.cost+(Math.floor(Math.random()*3)-1));
-      if(elixir<cost){alert("Not enough elixir!");return;}
-      if(cardCooldowns[card.name]&&Date.now()<cardCooldowns[card.name]){alert(card.name+" is recharging!");return;}
-      elixir-=cost;
-      cardCooldowns[card.name]=Date.now()+5000;
-      db.ref("rooms/"+roomId+"/actions").push({card,player:playerId,lane,cost});
-      cycleHand(card);
+      // mark player inside room
+      db.ref("rooms/"+roomId+"/players/"+playerId).set(true);
+      window.addEventListener("beforeunload",()=>{
+        db.ref("rooms/"+roomId+"/players/"+playerId).remove();
+        db.ref("rooms/"+roomId+"/players").once("value").then(snap=>{
+          if(!snap.exists()){db.ref("rooms/"+roomId).remove();}
+        });
+      });
     }
   </script>
 </body>
