@@ -7,7 +7,7 @@
     body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background: url('flash-royale-bg.png') no-repeat center center fixed;
+      background: url('dark-castle.png') no-repeat center center fixed;
       background-size: cover;
       width: 100%;
       height: 100%;
@@ -47,7 +47,7 @@
       border: 2px solid white;
       border-radius: 10px;
       background: #222;
-      display: flex;
+      display: none; /* hidden by default */
       justify-content: space-between;
       padding: 2px;
     }
@@ -154,17 +154,59 @@
     initElixirBar();
     function updateElixir(){let now=Date.now();if(now-lastElixirTime>=elixirRegenRate&&elixir<maxElixir){elixir++;lastElixirTime=now;}for(let i=0;i<maxElixir;i++){let seg=document.getElementById("elixir-"+i);if(i<elixir){seg.classList.add("elixir-filled");}else{seg.classList.remove("elixir-filled");}}}
     setInterval(updateElixir,500);
-    setInterval(()=>{renderHand();},1000); // refresh cooldown timers
+    setInterval(()=>{renderHand();},1000);
 
-    // --- Battle Actions (simplified) ---
+    // --- Matchmaking ---
+    let roomId=null,isHost=false,searching=false;
+    function findMatch(){
+      document.getElementById("statusText").innerText="Searching...";
+      document.getElementById("battleBtn").style.display="none";
+      document.getElementById("cancelBtn").style.display="inline-block";
+      searching=true;
+      let queueRef=db.ref("queue");
+      queueRef.once("value").then(snap=>{
+        let q=snap.val();
+        if(q){
+          let oppId=Object.keys(q)[0];
+          roomId="room-"+Date.now();
+          isHost=true;
+          db.ref("rooms/"+roomId).set({players:{[playerId]:true,[oppId]:true}});
+          db.ref("queue/"+oppId).remove();
+          startBattle();
+        } else {
+          db.ref("queue/"+playerId).set(true);
+          db.ref("rooms").on("child_added",snap=>{
+            if(!searching) return;
+            let r=snap.val();
+            if(r.players && r.players[playerId] && !roomId){
+              roomId=snap.key; startBattle();
+            }
+          });
+        }
+      });
+    }
+    function cancelSearch(){searching=false;db.ref("queue/"+playerId).remove();document.getElementById("statusText").innerText="Idle";document.getElementById("battleBtn").style.display="inline-block";document.getElementById("cancelBtn").style.display="none";}
+
+    // --- Battle ---
+    function startBattle(){
+      searching=false;
+      db.ref("queue/"+playerId).remove();
+      document.getElementById("menuScreen").style.display="none";
+      document.getElementById("battleScreen").style.display="block";
+      document.getElementById("cardBar").style.display="flex";
+      document.getElementById("elixirBar").style.display="flex"; // show elixir bar only in battle
+      document.getElementById("statusText").innerText="In Battle";
+      document.getElementById("cancelBtn").style.display="none";
+      initDeck();
+    }
+
     function sendAction(card,lane){
       let cost=Math.max(1,card.cost+(Math.floor(Math.random()*3)-1));
       if(elixir<cost){alert("Not enough elixir!");return;}
       if(cardCooldowns[card.name]&&Date.now()<cardCooldowns[card.name]){alert(card.name+" is recharging!");return;}
       elixir-=cost;
-      cardCooldowns[card.name]=Date.now()+5000; // 5s cooldown
+      cardCooldowns[card.name]=Date.now()+5000;
       db.ref("rooms/"+roomId+"/actions").push({card,player:playerId,lane,cost});
-      spawnUnit(card,"ally",lane);
       cycleHand(card);
     }
   </script>
