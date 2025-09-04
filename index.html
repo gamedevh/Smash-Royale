@@ -21,6 +21,12 @@
       font-size:32px; color:black; cursor:pointer; margin-top:80px;
       border:3px solid #fff; box-shadow:0 0 25px rgba(255,255,0,0.9);
     }
+    .cancel-btn {
+      background:#ff4444; padding:15px 40px; border-radius:15px;
+      font-size:24px; color:white; cursor:pointer; margin-top:40px;
+      border:3px solid #fff; box-shadow:0 0 20px rgba(255,0,0,0.7);
+      display:none;
+    }
     /* Card bar */
     #cardBar {
       position:fixed; bottom:70px; left:50%; transform:translateX(-50%);
@@ -63,9 +69,10 @@
     <div id="statusText">Idle</div>
   </div>
 
-  <!-- Main Screen -->
-  <div id="menuScreen" class="screen">
-    <button class="battle-btn" onclick="findMatch()">BATTLE</button>
+  <!-- Menu Screen -->
+  <div id="menuScreen" class="screen" style="display:block;">
+    <button id="battleBtn" class="battle-btn" onclick="findMatch()">BATTLE</button>
+    <button id="cancelBtn" class="cancel-btn" onclick="cancelSearch()">Cancel</button>
   </div>
 
   <!-- Battle Screen -->
@@ -94,9 +101,10 @@
     firebase.initializeApp(firebaseConfig);
     const db=firebase.database();
 
-    // --- Game Vars ---
+    // --- Vars ---
     let playerId="player-"+Math.floor(Math.random()*10000);
     let roomId=null, ctx, loop;
+    let searching=false;
     let towers=[], units=[];
     let elixir=5;
     let deck=[
@@ -110,20 +118,28 @@
     // --- Matchmaking ---
     function findMatch(){
       document.getElementById("statusText").innerText="Searching...";
+      document.getElementById("battleBtn").style.display="none";
+      document.getElementById("cancelBtn").style.display="inline-block";
+      searching=true;
+
       let queueRef=db.ref("queue");
+
       queueRef.once("value").then(snap=>{
         let q=snap.val();
-        if(q){ // Someone is waiting
+        if(q){ // Someone waiting
           let oppId=Object.keys(q)[0];
           roomId="room-"+Date.now();
           db.ref("rooms/"+roomId).set({players:{[playerId]:true,[oppId]:true}});
           db.ref("queue/"+oppId).remove();
           startBattle();
-        } else { // Join queue
+        } else { // First in queue
           db.ref("queue/"+playerId).set(true);
+
+          // Watch for being matched
           db.ref("rooms").on("child_added",(snap)=>{
+            if(!searching) return; // If canceled, ignore
             let r=snap.val();
-            if(r.players && r.players[playerId]){
+            if(r.players && r.players[playerId] && !roomId){
               roomId=snap.key;
               startBattle();
             }
@@ -132,13 +148,26 @@
       });
     }
 
-    // --- Battle ---
+    function cancelSearch(){
+      searching=false;
+      db.ref("queue/"+playerId).remove();
+      document.getElementById("statusText").innerText="Idle";
+      document.getElementById("battleBtn").style.display="inline-block";
+      document.getElementById("cancelBtn").style.display="none";
+    }
+
+    // --- Start Battle ---
     function startBattle(){
+      searching=false;
+      db.ref("queue/"+playerId).remove();
       document.getElementById("menuScreen").style.display="none";
       document.getElementById("battleScreen").style.display="block";
       document.getElementById("cardBar").style.display="flex";
       document.getElementById("elixirBar").style.display="block";
+      document.getElementById("statusText").innerText="In Battle";
+      document.getElementById("cancelBtn").style.display="none";
       ctx=document.getElementById("battleCanvas").getContext("2d");
+
       initBattle();
       initDeck();
       loop=setInterval(updateBattle,50);
@@ -200,7 +229,7 @@
       elixir=Math.min(elixir+0.02,10);
       document.getElementById("elixirFill").style.width=(elixir*10)+"%";
 
-      // Draw midline
+      // Midline
       ctx.strokeStyle="gray"; ctx.beginPath(); ctx.moveTo(0,250); ctx.lineTo(800,250); ctx.stroke();
 
       // Towers
