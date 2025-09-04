@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>Flash Royale</title>
   <style>
-    body { margin:0; font-family:Arial,sans-serif; background:#0a0f1e url('castle-bg.png') no-repeat center center fixed; background-size:cover; color:white; user-select:none; }
+    body { margin:0; font-family:Arial,sans-serif; background:#000 url('dark-castle.png') no-repeat center center fixed; background-size:cover; color:white; user-select:none; }
     .top-bar{display:flex;justify-content:space-between;align-items:center;padding:10px 20px;background:rgba(10,15,30,0.9);border-bottom:3px solid #1e3d59;font-size:14px;}
     .level{display:flex;align-items:center;gap:10px;}
     .level-bar{background:#222;border-radius:6px;width:120px;height:10px;overflow:hidden;border:1px solid #555;}
@@ -16,17 +16,16 @@
     #menuScreen{display:block;text-align:center;}
     .battle-btn{background:#ffcc00;padding:20px 60px;border-radius:20px;font-size:32px;color:black;cursor:pointer;margin-top:20px;border:3px solid #fff;box-shadow:0 0 25px rgba(255,255,0,0.9);}
     .cancel-btn{background:#ff4444;padding:15px 40px;border-radius:15px;font-size:24px;color:white;cursor:pointer;margin-top:20px;border:3px solid #fff;box-shadow:0 0 20px rgba(255,0,0,0.7);display:none;}
-    .chest-bar{display:flex;justify-content:center;gap:15px;margin-top:20px;}
-    .chest{width:80px;height:80px;background:#333;border:3px solid #888;border-radius:12px;}
-    .deck,#collection{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px auto;max-width:400px;}
+    .deck,#collection,#shop{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px auto;max-width:400px;}
     .card{position:relative;border-radius:12px;overflow:hidden;text-align:center;font-size:12px;cursor:pointer;background:linear-gradient(to bottom,#333,#111);border:3px solid #888;box-shadow:0 3px 8px rgba(0,0,0,0.6);padding:5px;}
     .card img{width:70%;margin:5px auto;}
+    .card.selected{border:3px solid cyan;box-shadow:0 0 15px cyan;}
     .elixir-cost{position:absolute;top:5px;left:5px;background:#9c27b0;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold;border:2px solid white;}
     .tabs{position:fixed;bottom:0;left:0;width:100%;display:flex;justify-content:space-around;background:rgba(10,15,30,0.95);border-top:3px solid #1e3d59;padding:10px 0;}
     .tab{text-align:center;flex:1;cursor:pointer;font-size:14px;padding:5px;}
     .tab img{width:28px;display:block;margin:auto;}
     .tab:hover{background:#1e3d59;}
-    #battleCanvas{background:#2a2a2a;border:3px solid white;margin-top:20px;}
+    #battleCanvas{background:rgba(0,0,0,0.6);border:3px solid white;margin-top:20px;}
     #cardBar{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);display:flex;gap:10px;display:none;}
     #elixirBar{position:fixed;bottom:50px;left:50%;transform:translateX(-50%);width:300px;height:20px;border:2px solid white;border-radius:10px;background:#222;display:none;}
     #elixirFill{background:purple;width:0%;height:100%;border-radius:10px;}
@@ -35,209 +34,177 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
 </head>
 <body>
+  <!-- Top HUD -->
   <div class="top-bar">
-    <div class="level"><div>👑 Lvl 11</div><div class="level-bar"><div class="level-fill"></div></div></div>
+    <div class="level"><div>👑 Lvl <span id="level">1</span></div><div class="level-bar"><div class="level-fill"></div></div></div>
     <div class="currency">
-      <div><img src="https://img.icons8.com/emoji/48/000000/coin-emoji.png"/> 145,881</div>
-      <div><img src="https://img.icons8.com/color/48/000000/emerald.png"/> 828</div>
+      <div><img src="https://img.icons8.com/emoji/48/000000/coin-emoji.png"/> <span id="coinCount">0</span></div>
+      <div><img src="https://img.icons8.com/color/48/000000/emerald.png"/> 0</div>
     </div>
     <div id="statusText">Idle</div>
   </div>
 
+  <!-- Menu Screen -->
   <div id="menuScreen" class="screen" style="display:block;">
     <h2>🏆 Flash Royale</h2>
-    <p>Your trophies: <b>4698</b></p>
-    <div class="chest-bar"><div class="chest"></div><div class="chest"></div><div class="chest"></div><div class="chest"></div></div>
+    <p>Your trophies: <b id="trophies">0</b></p>
     <button id="battleBtn" class="battle-btn" onclick="findMatch()">BATTLE</button>
     <button id="cancelBtn" class="cancel-btn" onclick="cancelSearch()">Cancel</button>
     <h2>Your Deck</h2><div class="deck" id="deck"></div>
     <h2>Card Collection</h2><div id="collection"></div>
+    <h2>Shop</h2><div id="shop"></div>
   </div>
 
+  <!-- Battle Screen -->
   <div id="battleScreen" class="screen" style="display:none;">
     <canvas id="battleCanvas" width="800" height="700"></canvas>
   </div>
   <div id="cardBar"></div>
   <div id="elixirBar"><div id="elixirFill"></div></div>
+
+  <!-- Tabs -->
   <div class="tabs">
     <div class="tab" onclick="switchScreen('menuScreen')"><img src="https://img.icons8.com/ios/50/ffffff/cards.png"/>Cards</div>
     <div class="tab" onclick="switchScreen('menuScreen')"><img src="https://img.icons8.com/ios/50/ffffff/swords.png"/>Battle</div>
-    <div class="tab" onclick="switchScreen('menuScreen')"><img src="https://img.icons8.com/ios/50/ffffff/group.png"/>Clan</div>
-    <div class="tab" onclick="switchScreen('menuScreen')"><img src="https://img.icons8.com/ios/50/ffffff/trophy.png"/>Leaderboard</div>
+    <div class="tab" onclick="switchScreen('menuScreen')"><img src="https://img.icons8.com/ios/50/ffffff/shopping-cart.png"/>Shop</div>
   </div>
 
   <script>
     // --- Firebase Init ---
-    const firebaseConfig = {
-      apiKey:"AIzaSyA3FUH9RZiQ9IRChNpGqNrgjt2r5AA5RF8",
-      authDomain:"flash-royale-a92c0.firebaseapp.com",
-      databaseURL:"https://flash-royale-a92c0-default-rtdb.firebaseio.com",
-      projectId:"flash-royale-a92c0",
-      storageBucket:"flash-royale-a92c0.appspot.com",
-      messagingSenderId:"703977930640",
-      appId:"1:703977930640:web:a4f70deb5bbe508aec7d15",
-      measurementId:"G-61B7P6WEL0"
-    };
+    const firebaseConfig={apiKey:"AIzaSyA3FUH9RZiQ9IRChNpGqNrgjt2r5AA5RF8",authDomain:"flash-royale-a92c0.firebaseapp.com",databaseURL:"https://flash-royale-a92c0-default-rtdb.firebaseio.com",projectId:"flash-royale-a92c0",storageBucket:"flash-royale-a92c0.appspot.com",messagingSenderId:"703977930640",appId:"1:703977930640:web:a4f70deb5bbe508aec7d15",measurementId:"G-61B7P6WEL0"};
     firebase.initializeApp(firebaseConfig);
     const db=firebase.database();
 
-    // --- Persistent Player ID for Rejoin ---
-    let playerId = localStorage.getItem("playerId");
-    if(!playerId){
-      playerId = "player-"+Math.floor(Math.random()*10000);
-      localStorage.setItem("playerId", playerId);
-    }
+    // --- Player Profile ---
+    let playerId=localStorage.getItem("playerId");
+    if(!playerId){playerId="player-"+Math.floor(Math.random()*10000);localStorage.setItem("playerId",playerId);}
+    let coins=0,trophies=0,ownedCards=["Knight"];
 
-    let roomId=null, ctx, loop;
-    let isHost=false;
-    let searching=false;
-    let towers=[], units=[];
-    let elixir=5;
-    let deck=[
-      {name:"Knight",hp:200,dmg:20,range:20,cost:3,img:"https://img.icons8.com/color/96/knight.png"},
-      {name:"Archer",hp:120,dmg:15,range:120,cost:3,img:"https://img.icons8.com/color/96/bow.png"},
-      {name:"Golem",hp:300,dmg:10,range:30,cost:5,img:"https://img.icons8.com/color/96/rock.png"},
-      {name:"Dragon",hp:150,dmg:30,range:80,cost:4,img:"https://img.icons8.com/color/96/dragon.png"}
+    const playerRef=db.ref("players/"+playerId);
+    playerRef.once("value").then(snap=>{
+      if(!snap.exists()){
+        playerRef.set({coins:0,trophies:0,ownedCards:["Knight"]});
+      }
+    });
+
+    // Sync
+    playerRef.on("value",snap=>{
+      if(snap.exists()){
+        let data=snap.val();
+        coins=data.coins||0;
+        trophies=data.trophies||0;
+        ownedCards=data.ownedCards||["Knight"];
+        updateCoinsDisplay(coins);
+        document.getElementById("trophies").innerText=trophies;
+        renderDeck();renderCollection();renderShop();
+      }
+    });
+
+    function updateCoinsDisplay(val){document.getElementById("coinCount").innerText=val;}
+
+    // --- Cards & Shop ---
+    let allCards=[
+      {name:"Knight",hp:200,dmg:20,range:20,cost:3,img:"https://img.icons8.com/color/96/knight.png",price:0},
+      {name:"Archer",hp:120,dmg:15,range:120,cost:3,img:"https://img.icons8.com/color/96/bow.png",price:150},
+      {name:"Golem",hp:300,dmg:10,range:30,cost:5,img:"https://img.icons8.com/color/96/rock.png",price:200},
+      {name:"Dragon",hp:150,dmg:30,range:80,cost:4,img:"https://img.icons8.com/color/96/dragon.png",price:300}
     ];
-    let hand=[], drawPile=[], selectedCard=null;
 
-    // Render Deck + Collection
-    function renderDeck(){let deckEl=document.getElementById("deck");deckEl.innerHTML="";deck.forEach(c=>{let d=document.createElement("div");d.className="card";d.innerHTML=`<div class="elixir-cost">${c.cost}</div><img src="${c.img}"><b>${c.name}</b>`;deckEl.appendChild(d);});}
-    function renderCollection(){let col=document.getElementById("collection");col.className="deck";col.innerHTML="";deck.forEach(c=>{let d=document.createElement("div");d.className="card";d.innerHTML=`<div class="elixir-cost">${c.cost}</div><img src="${c.img}"><b>${c.name}</b>`;col.appendChild(d);});}
-    renderDeck();renderCollection();
-
-    // --- Matchmaking (transaction-based) ---
-    function findMatch(){
-      document.getElementById("statusText").innerText="Searching...";
-      document.getElementById("battleBtn").style.display="none";
-      document.getElementById("cancelBtn").style.display="inline-block";
-      searching=true;
-      let queueRef=db.ref("queue");
-
-      queueRef.transaction(current=>{
-        if(!current){return {[playerId]:true};}
-        else{let oppId=Object.keys(current)[0];roomId="room-"+Date.now();isHost=true;db.ref("rooms/"+roomId).set({players:{[playerId]:true,[oppId]:true}});return null;}
-      },(err,committed,snap)=>{
-        if(err){console.error(err);cancelSearch();}
-        else if(committed){
-          let q=snap.val();
-          if(q && q[playerId]){
-            db.ref("rooms").on("child_added",snap=>{
-              if(!searching)return;
-              let r=snap.val();
-              if(r.players && r.players[playerId] && !roomId){roomId=snap.key;startBattle();}
-            });
-          } else if(roomId){startBattle();}
+    function renderDeck(){
+      let deckEl=document.getElementById("deck");
+      deckEl.innerHTML="";
+      ownedCards.forEach(cn=>{
+        let c=allCards.find(x=>x.name===cn);
+        if(c){
+          let d=document.createElement("div");
+          d.className="card";
+          d.innerHTML=`<div class="elixir-cost">${c.cost}</div><img src="${c.img}"><b>${c.name}</b>`;
+          deckEl.appendChild(d);
         }
       });
     }
-    function cancelSearch(){searching=false;db.ref("queue/"+playerId).remove();document.getElementById("statusText").innerText="Idle";document.getElementById("battleBtn").style.display="inline-block";document.getElementById("cancelBtn").style.display="none";}
 
-    // --- Battle ---
-    function startBattle(){
-      searching=false;db.ref("queue/"+playerId).remove();
-      document.getElementById("menuScreen").style.display="none";
-      document.getElementById("battleScreen").style.display="block";
-      document.getElementById("cardBar").style.display="flex";
-      document.getElementById("elixirBar").style.display="block";
-      document.getElementById("statusText").innerText="In Battle";
-      document.getElementById("cancelBtn").style.display="none";
-      ctx=document.getElementById("battleCanvas").getContext("2d");
-      initBattle();initDeck();
-
-      if(isHost){loop=setInterval(updateBattleHost,200);}
-      db.ref("rooms/"+roomId+"/state").on("value",snap=>{
-        let state=snap.val();if(!state)return;
-        towers=state.towers||[];units=state.units||[];elixir=state.elixir||0;drawBattle();
+    function renderCollection(){
+      let col=document.getElementById("collection");
+      col.innerHTML="";
+      ownedCards.forEach(cn=>{
+        let c=allCards.find(x=>x.name===cn);
+        if(c){
+          let d=document.createElement("div");
+          d.className="card";
+          d.innerHTML=`<div class="elixir-cost">${c.cost}</div><img src="${c.img}"><b>${c.name}</b>`;
+          col.appendChild(d);
+        }
       });
-      document.getElementById("battleCanvas").addEventListener("click",e=>{
-        if(!selectedCard)return;
+    }
+
+    function renderShop(){
+      let shop=document.getElementById("shop");
+      shop.innerHTML="";
+      allCards.forEach(c=>{
+        if(!ownedCards.includes(c.name) && c.price>0){
+          let d=document.createElement("div");
+          d.className="card";
+          d.innerHTML=`<img src="${c.img}"><b>${c.name}</b><br>💰 ${c.price}`;
+          d.onclick=()=>{
+            if(coins>=c.price){
+              coins-=c.price;
+              ownedCards.push(c.name);
+              playerRef.update({coins:coins,ownedCards:ownedCards});
+            }
+          };
+          shop.appendChild(d);
+        }
+      });
+    }
+
+    // --- Rewards (when game ends) ---
+    function rewardWinner(){
+      coins+=100;
+      trophies+=5;
+      playerRef.update({coins:coins,trophies:trophies});
+    }
+
+    // --- Battlefield Placement ---
+    let selectedCard=null;
+    let placementCircle=null;
+    const canvas=document.getElementById("battleCanvas");
+    const ctx=canvas.getContext("2d");
+
+    canvas.addEventListener("mousemove",e=>{
+      if(selectedCard){
         let rect=e.target.getBoundingClientRect();
         let x=e.clientX-rect.left;
-        let lane;
-        if(x<325)lane="top";
-        else if(x<475)lane="mid";
-        else lane="bot";
-        if(elixir>=selectedCard.cost){
-          sendAction(selectedCard,lane);
-          cycleHand(selectedCard);
-          selectedCard=null;
-        }
-      });
-      db.ref("rooms/"+roomId+"/actions").on("child_added",snap=>{
-        let a=snap.val();if(a&&isHost){applyAction(a);}});
-    }
+        let y=e.clientY-rect.top;
+        if(y<350){placementCircle=null;}
+        else{placementCircle={x,y};}
+        drawBattle();
+      }
+    });
 
-    function sendAction(card,lane){db.ref("rooms/"+roomId+"/actions").push({card,player:playerId,lane,timestamp:Date.now()});}
-
-    function initBattle(){
-      towers=[{x:250,y:50,hp:300,color:"blue",lane:"top"},{x:400,y:50,hp:300,color:"blue",lane:"mid"},{x:550,y:50,hp:300,color:"blue",lane:"bot"},
-              {x:250,y:650,hp:300,color:"red",lane:"top"},{x:400,y:650,hp:300,color:"red",lane:"mid"},{x:550,y:650,hp:300,color:"red",lane:"bot"}];
-      units=[];elixir=5;
-      if(isHost)db.ref("rooms/"+roomId+"/state").set({towers,units,elixir});
-    }
-
-    function applyAction(a){spawnUnit(a.card,a.player===playerId?"ally":"enemy",a.lane);}
-    function spawnUnit(card,side,lane){
-      let dir=side==="ally"?1:-1;
-      let color=side==="ally"?"blue":"red";
-      let y=side==="ally"?100:600;
-      let x=(lane==="top")?250:(lane==="mid")?400:550;
-      let img=new Image();img.src=card.img;
-      units.push({id:Date.now()+"-"+Math.random(),name:card.name,x,y,hp:card.hp,maxHp:card.hp,dmg:card.dmg,range:card.range,dir,color,cooldown:0,lane,sprite:img,animOffset:0});
-    }
-
-    function updateBattleHost(){
-      elixir=Math.min(elixir+0.1,10);
-      units.forEach(u=>{
-        // walking animation bobbing
-        u.animOffset=Math.sin(Date.now()/150)*3;
-        u.y+=u.dir*2;
-        let enemies=units.filter(e=>e.color!==u.color&&e.lane===u.lane);
-        let target=enemies.find(e=>Math.abs(e.y-u.y)<u.range);
-        if(target){if(u.cooldown<=0){target.hp-=u.dmg;u.cooldown=20;}}
-        if(u.cooldown>0)u.cooldown--;
-        towers.forEach(t=>{
-          if(t.color!==u.color&&t.lane===u.lane&&Math.abs(u.y-t.y)<40){
-            t.hp-=u.dmg;u.hp=0;
-            if(t.hp<=0&&t.color==="red"){alert("Blue wins!");clearInterval(loop);}
-            if(t.hp<=0&&t.color==="blue"){alert("Red wins!");clearInterval(loop);}
-          }
-        });
-      });
-      units=units.filter(u=>u.hp>0);
-      db.ref("rooms/"+roomId+"/state").set({towers,units,elixir});
-    }
+    canvas.addEventListener("click",e=>{
+      if(selectedCard && placementCircle){
+        let lane=(placementCircle.x<325)?"top":(placementCircle.x<475)?"mid":"bot";
+        console.log("Placed",selectedCard.name,"in",lane);
+        selectedCard=null;placementCircle=null;
+        drawBattle();
+      }
+    });
 
     function drawBattle(){
       ctx.clearRect(0,0,800,700);
-      document.getElementById("elixirFill").style.width=(elixir*10)+"%";
-      // lane lines
-      ctx.strokeStyle="gray";ctx.beginPath();
-      ctx.moveTo(325,0);ctx.lineTo(325,700);
-      ctx.moveTo(475,0);ctx.lineTo(475,700);
-      ctx.stroke();
-      // towers
-      towers.forEach(t=>{
-        ctx.fillStyle=t.color;ctx.fillRect(t.x-25,t.y-25,50,50);
-        ctx.fillStyle="white";ctx.fillText("HP:"+t.hp,t.x-20,t.y-40);
-      });
-      // units
-      units.forEach(u=>{
-        if(u.sprite.complete){ctx.drawImage(u.sprite,u.x-20,u.y-20+u.animOffset,40,40);}
-        else{ctx.fillStyle=u.color;ctx.beginPath();ctx.arc(u.x,u.y,12,0,Math.PI*2);ctx.fill();}
-        // health bar
-        let barWidth=40;let hpPercent=Math.max(u.hp,0)/u.maxHp;
-        ctx.fillStyle="red";ctx.fillRect(u.x-20,u.y-30,barWidth,5);
-        ctx.fillStyle="lime";ctx.fillRect(u.x-20,u.y-30,barWidth*hpPercent,5);
-      });
+      if(placementCircle){
+        ctx.strokeStyle="white";
+        ctx.beginPath();
+        ctx.arc(placementCircle.x,placementCircle.y,25,0,Math.PI*2);
+        ctx.stroke();
+      }
     }
 
-    // --- Deck & Hand ---
-    function initDeck(){drawPile=[...deck];hand=drawPile.splice(0,4);renderHand();}
-    function renderHand(){let bar=document.getElementById("cardBar");bar.innerHTML="";hand.forEach(c=>{let d=document.createElement("div");d.className="card";d.innerHTML=`<div class="elixir-cost">${c.cost}</div><img src="${c.img}"><b>${c.name}</b>`;d.onclick=()=>{selectedCard=c;};bar.appendChild(d);});}
-    function cycleHand(card){let i=hand.indexOf(card);if(i>-1){hand.splice(i,1);if(drawPile.length>0)hand.push(drawPile.shift());}renderHand();}
-    function switchScreen(id){document.querySelectorAll('.screen').forEach(s=>s.style.display='none');document.getElementById(id).style.display='block';}
+    function switchScreen(id){
+      document.querySelectorAll('.screen').forEach(s=>s.style.display='none');
+      document.getElementById(id).style.display='block';
+    }
   </script>
 </body>
 </html>
