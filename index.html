@@ -83,7 +83,7 @@
       margin-top:30px; padding:15px 40px; font-size:20px; border:none; border-radius:12px; cursor:pointer; background:gold; color:#000;
     }
 
-    /* --- CHANGELOG MODAL (existing addition) --- */
+    /* --- CHANGELOG MODAL --- */
     #changelogOverlay{
       position:fixed; inset:0; background:rgba(0,0,0,0.65);
       display:none; align-items:center; justify-content:center; z-index:20;
@@ -107,13 +107,18 @@
     #changelogClose:hover{ background:#374151; }
     #changelogHint{ opacity:0.7; font-size:12px; }
 
-    /* --- LEADERBOARD (NEW) --- */
+    /* --- LEADERBOARD (RIGHT) --- */
     .leaderboard{
-      max-width:540px; margin:20px auto; text-align:left;
-      background:rgba(17,24,39,0.75);
+      position:fixed;
+      right:20px;
+      top:90px; bottom:20px;
+      width:360px;
+      overflow:auto;
+      text-align:left;
+      background:rgba(17,24,39,0.85);
       border:2px solid #334155; border-radius:16px;
       box-shadow:0 8px 24px rgba(0,0,0,0.35);
-      overflow:hidden;
+      z-index:2;
     }
     .leaderboard h3{
       margin:0; padding:12px 16px; background:#0f172a; border-bottom:2px solid #334155; font-size:18px;
@@ -194,12 +199,10 @@
     <h2>Shop</h2>
     <div class="shop" id="shop"></div>
 
-    <!-- GLOBAL LEADERBOARD (NEW; menu-only because it's inside #menuScreen) -->
+    <!-- GLOBAL LEADERBOARD (menu-only, right side) -->
     <div class="leaderboard" id="leaderboard">
       <h3>🌍 Global Leaderboard (Trophies)</h3>
-      <div id="leaderboardRows">
-        <!-- filled by JS -->
-      </div>
+      <div id="leaderboardRows"></div>
     </div>
   </div>
 
@@ -219,7 +222,7 @@
     <button onclick="returnToMenu()">OK</button>
   </div>
 
-  <!-- CHANGELOG MODAL (existing addition) -->
+  <!-- CHANGELOG MODAL -->
   <div id="changelogOverlay" role="dialog" aria-modal="true" aria-labelledby="changelogTitle">
     <div id="changelogModal">
       <button id="changelogClose" aria-label="Close changelog">×</button>
@@ -230,7 +233,7 @@
         <li>Tower AI that shoots back; health bars on towers &amp; units.</li>
         <li>Strict 1v1 matchmaking with multiple simultaneous rooms.</li>
         <li>Elixir bar (10 segments, +1 per 2s), 5s card cooldown after use.</li>
-        <li>Shop with 24 characters; safe coin deductions; +100 coins &amp; +5 trophies on win.</li>
+        <li>Shop with 24 characters; +100 coins &amp; +5 trophies on win.</li>
         <li>Rejoin after refresh; rooms auto-clean when both players leave.</li>
         <li>Player names shown by king castles; placement only on your half.</li>
       </ul>
@@ -495,7 +498,7 @@
 
     // Arena geometry (pathing)
     const RIVER_H = 40;
-    const BRIDGE_W = 140;
+    const BRIDGE_W = 140; /* fixed */
     const RIVER_Y = canvas.height/2 - RIVER_H/2;
     const BRIDGE_CENTERS = [220, 580]; // x centers
 
@@ -658,7 +661,7 @@
         name:card.name, hp:card.hp, maxHp:card.maxHp, dmg:card.dmg, range:card.range,
         speed, side, x, y, cooldown:0, dir:(side==="blue" ? -1 : 1),
         pathStage:'toBridge', targetX: bridgeX, targetY: startTargetY,
-        goal: null // will be set after crossing
+        goal: null
       });
     }
 
@@ -766,6 +769,7 @@
       document.getElementById("resultText").innerText = iWon ? "🏆 Victory!" : "❌ Defeat";
       document.getElementById("rewardText").innerText = iWon ? "+100 Coins, +5 Trophies" : "Better luck next time!";
       document.getElementById("resultScreen").style.display="block";
+      // (ADDED) Cleanup will be handled by setupRoomAutoCleanup() listener on 'state'
     }
 
     function leaveRoomAndMaybeDelete(){
@@ -818,6 +822,29 @@
       ]);
       nameBlue = bNameSnap.val() || "Blue";
       nameRed  = rNameSnap.val() || "Red";
+    }
+
+    /* --- (ADDED) Room auto-cleanup helpers --- */
+    let inactiveCleanupTimer=null, endedCleanupTimer=null;
+    function setupRoomAutoCleanup(){
+      // Delete the room shortly after it ends
+      roomRef.child("state").on("value", s=>{
+        if(s.val()==="ended"){
+          if(endedCleanupTimer) clearTimeout(endedCleanupTimer);
+          endedCleanupTimer = setTimeout(()=>{ roomRef.remove(); }, 15000); // 15s grace
+        }
+      });
+      // Delete the room if both players are disconnected/inactive
+      roomPlayersRef.on("value", s=>{
+        let anyConnected=false;
+        s.forEach(p=>{ const v=p.val(); if(v && v.connected) anyConnected=true; });
+        if(!anyConnected){
+          if(inactiveCleanupTimer) clearTimeout(inactiveCleanupTimer);
+          inactiveCleanupTimer = setTimeout(()=>{ roomRef.remove(); }, 8000); // 8s
+        }else{
+          if(inactiveCleanupTimer){ clearTimeout(inactiveCleanupTimer); inactiveCleanupTimer=null; }
+        }
+      });
     }
 
     /* Main draw loop */
@@ -878,6 +905,9 @@
       stateRef   = roomRef.child("authoritativeState");
       roomPlayersRef = roomRef.child("players");
 
+      // (ADDED) Nudge host election immediately (no-op if already set)
+      roomRef.child("host").transaction(v => v || playerId);
+
       roomRef.child("host").on("value", snap=>{
         hostId = snap.val();
         isHost = (hostId === playerId);
@@ -892,6 +922,14 @@
 
       roomRef.child("players/"+playerId).update({connected:true, side:mySide, name:playerName});
       roomRef.child("players/"+playerId).onDisconnect().update({connected:false, lastSeen: firebase.database.ServerValue.TIMESTAMP});
+
+      // (ADDED) Initial readiness check so placement works without manual refresh
+      roomPlayersRef.once("value").then(s=>{
+        let connected=0;
+        s.forEach(p=>{ if(p.val() && p.val().connected) connected++; });
+        battleReady = (connected>=2);
+        document.getElementById("statusText").innerText = battleReady ? "In Battle" : "In Battle (waiting for opponent…)";
+      });
 
       roomPlayersRef.on("value", s=>{
         let connected=0, hostConnected=false;
@@ -924,7 +962,16 @@
       units=[]; projectiles=[]; gameOver=false; selectedCard=null; placementCircle=null; battleReady=false;
       pendingActionKeys.clear();
 
+      // Render hand once and keep it synced while in battle (ADDED)
       playerRef.child("ownedCards").once("value").then(s=>{ renderHand(s.val()||{}); });
+      playerRef.child("ownedCards").on("value", s=>{
+        if(document.getElementById("battleScreen").style.display==="block"){
+          renderHand(s.val()||{});
+        }
+      });
+
+      // (ADDED) Arm room auto-cleanup (end-of-game or both inactive)
+      setupRoomAutoCleanup();
 
       roomRef.child("winner").on("value", snap=>{
         const w=snap.val(); if(!w || gameOver) return;
@@ -956,9 +1003,12 @@
       placementCircle=null; selectedCard=null; gameOver=false;
       roomId=null; mySide=null; searching=false; battleReady=false;
       queueAdded=false; isHost=false; hostId=null;
+
+      // Stop in-battle ownedCards subscription (optional: harmless if left)
+      playerRef.child("ownedCards").off();
     }
 
-    /************ Leaderboard (NEW) ************/
+    /************ Leaderboard ************/
     function renderLeaderboard(rows){
       const container = document.getElementById('leaderboardRows');
       if(!container) return;
@@ -974,9 +1024,7 @@
         container.appendChild(div);
       });
     }
-
     function subscribeLeaderboard(){
-      // Top 20 by trophies; we reverse to show highest first
       db.ref('players').orderByChild('trophies').limitToLast(20).on('value', snap=>{
         const arr=[];
         snap.forEach(ch=>{
@@ -987,11 +1035,10 @@
         renderLeaderboard(arr);
       });
     }
-    // Start the subscription once we’re online
     subscribeLeaderboard();
   </script>
 
-  <!-- CHANGELOG SCRIPT (existing addition) -->
+  <!-- CHANGELOG SCRIPT -->
   <script>
     (function(){
       function showChangelog(){
