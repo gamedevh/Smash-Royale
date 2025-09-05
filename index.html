@@ -50,6 +50,7 @@
     }
     .price-tag{ position:absolute; bottom:6px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.6); padding:2px 6px; border-radius:6px; font-size:12px; }
     .shop .buy-btn{ margin-top:6px; padding:6px 10px; border-radius:8px; border:2px solid #fff; background:#28a745; color:#fff; cursor:pointer; }
+    .shop .buy-btn[disabled]{ opacity:.6; cursor:not-allowed; }
     .shop .owned{ margin-top:6px; padding:6px 10px; border-radius:8px; border:2px solid #888; background:#444; color:#aaa; }
 
     /* Procedural menu background (SVG) */
@@ -283,15 +284,25 @@
           <img src="${c.img}">
           <b>${c.name}</b>
           <div class="price-tag">${c.price} 🪙</div>
-          <div class="${ownedFlag?'owned':'buy-btn'}">${ownedFlag?'Owned':'Buy'}</div>
+          <button class="${ownedFlag?'owned':'buy-btn'}" ${ownedFlag?'disabled':''}>${ownedFlag?'Owned':'Buy'}</button>
         `;
         if(!ownedFlag){
-          el.querySelector('.buy-btn').onclick = async ()=>{
-            const snap = await playerRef.get(); const p = snap.val()||{};
-            const have = p.coins||0;
-            if(have < c.price){ alert("Not enough coins!"); return; }
-            await playerRef.child("coins").transaction(v => (v||0)-c.price);
-            await playerRef.child("ownedCards/"+c.name).set(true);
+          const btn = el.querySelector('.buy-btn');
+          btn.onclick = ()=>{
+            btn.disabled = true; btn.textContent = "Buying...";
+            // atomic coins deduction (no negatives), then grant card
+            playerRef.child("coins").transaction(v=>{
+              v=v||0; if(v < c.price) return; return v - c.price;
+            }, (err, committed)=>{
+              if(err || !committed){
+                btn.disabled=false; btn.textContent="Buy";
+                alert("Not enough coins or network error.");
+                return;
+              }
+              playerRef.child("ownedCards/"+c.name).set(true).then(()=>{
+                // on("value") listener will refresh shop/deck automatically
+              });
+            });
           };
         }
         shop.appendChild(el);
@@ -315,9 +326,9 @@
     }
     setInterval(updateElixir, 200);
 
-    /************ Matchmaking (strict 1v1; multiple rooms supported) ************/
+    /************ Matchmaking (strict 1v1; multiple rooms) ************/
     let roomId=null, mySide=null, searching=false, battleReady=false;
-    let actionsRef=null, roomPlayersRef=null, queueAdded=false;
+    let actionsRef=null, roomPlayersRef=null, queueAdded=false, pairInterval=null;
 
     function findMatch(){
       document.getElementById("statusText").innerText="Searching...";
@@ -332,7 +343,10 @@
         queueAdded=true;
       }
       attemptPair();
-      // Also listen if someone pairs us (we'll be inside a new room)
+      if(pairInterval) clearInterval(pairInterval);
+      pairInterval = setInterval(()=>{ if(searching && !roomId) attemptPair(); }, 1500);
+
+      // Also listen if someone pairs us
       db.ref("rooms").on("child_added", snap=>{
         if(!searching || roomId) return;
         const r=snap.val();
@@ -348,7 +362,6 @@
       db.ref("queue").once("value").then(snap=>{
         if(!searching || roomId) return;
         const q = snap.val()||{};
-        // choose oldest other player that isn't claimed
         let cand=null, bestTs=Infinity;
         Object.keys(q).forEach(k=>{
           if(k===playerId) return;
@@ -356,14 +369,13 @@
           const ts = typeof it.ts==='number' ? it.ts : Date.now();
           if(ts<bestTs){ bestTs=ts; cand=k; }
         });
-        if(!cand) return; // nobody else → remain "Searching" until someone joins
+        if(!cand) return; // nobody else → keep searching
 
-        // atomic claim to prevent race
+        // atomic claim
         db.ref("queue/"+cand+"/claimed").transaction(val=>{
           if(val) return; return playerId;
         }, async (err, committed, snap2)=>{
           if(err || !committed || snap2.val()!==playerId){ return; }
-          // fetch opponent name for room labeling
           const oppNameSnap = await db.ref("players/"+cand+"/name").once("value");
           const oppName = oppNameSnap.val() || "Opponent";
 
@@ -388,6 +400,7 @@
 
     function cancelSearch(){
       searching=false;
+      if(pairInterval){ clearInterval(pairInterval); pairInterval=null; }
       db.ref("queue/"+playerId).remove();
       queueAdded=false;
       document.getElementById("statusText").innerText="Idle";
@@ -557,8 +570,8 @@
     }
 
     function spawnUnit(card, side, x, y){
-      const slowFactor = 0.45; // MUCH slower, but animated
-      const speed = Math.max(0.4, card.speed * slowFactor);
+      const slowFactor = 0.30; // MUCH slower (keeps animation feel)
+      const speed = Math.max(0.35, card.speed * slowFactor);
 
       const bridgeX = pickNearestBridgeX(x);
       const startTargetY = side==='blue' ? (RIVER_Y + RIVER_H + 8) : (RIVER_Y - 8);
@@ -630,7 +643,6 @@
     }
 
     /* Tower AI (auto-shoot) */
-    let projectiles=[]; // {x,y,vx,vy,dmg,side}
     function updateTowersAI(){
       towers.forEach(t=>{
         if(t.hp<=0) return;
@@ -733,10 +745,8 @@
       // arena
       drawArena();
 
-      // towers (draw + check king death)
-      towers.forEach(t=>{
-        drawTower(t);
-      });
+      // towers (draw)
+      towers.forEach(t=> drawTower(t));
 
       // names on king castles
       const kBlue = towers.find(t=>t.side==="blue" && t.king);
@@ -744,7 +754,7 @@
       if(kBlue) drawTowerName(kBlue, nameBlue);
       if(kRed)  drawTowerName(kRed,  nameRed);
 
-      // win check after drawing (so names always visible)
+      // win check (after drawing so names stay visible)
       towers.forEach(t=>{
         if(!gameOver && t.hp<=0 && t.king){
           const winner = (t.side==="blue") ? "Red" : "Blue";
@@ -770,6 +780,7 @@
 
     function startBattle(){
       searching=false; db.ref("queue/"+playerId).remove();
+      if(pairInterval){ clearInterval(pairInterval); pairInterval=null; }
 
       // show battle UI
       document.getElementById("menuScreen").style.display="none";
@@ -794,7 +805,7 @@
       ];
       units=[]; projectiles=[]; gameOver=false; selectedCard=null; placementCircle=null; battleReady=false;
 
-      // ensure our player row in room has our name (in case host didn't set it)
+      // ensure our player row in room has our name
       db.ref("rooms/"+roomId+"/players/"+playerId).update({connected:true, side:mySide, name:playerName});
       db.ref("rooms/"+roomId+"/players/"+playerId).onDisconnect().update({connected:false, lastSeen: firebase.database.ServerValue.TIMESTAMP});
 
