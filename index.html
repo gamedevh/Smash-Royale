@@ -12,7 +12,8 @@
       color: white;
       user-select: none;
       overflow: hidden;
-      background: url('menu-bg.png') no-repeat center center fixed;
+      /* Use the castle background already in the repo */
+      background: url('dark-castle.png') no-repeat center center fixed;
       background-size: cover;
     }
     .top-bar{display:flex;justify-content:space-between;align-items:center;padding:10px 20px;background:rgba(10,15,30,0.7);border-bottom:3px solid #1e3d59;font-size:14px;}
@@ -133,10 +134,17 @@
   </div>
 
   <script>
-    // (Firebase + game logic ... unchanged)
+    // Simple demo logic for switching screens
+    function findMatch(){
+      startBattle();
+    }
+
+    function cancelSearch(){
+      returnToMenu();
+    }
 
     function startBattle(){
-      searching=false;db.ref("queue/"+playerId).remove();
+      // Hide menu and show battle UI without relying on Firebase
       document.getElementById("menuScreen").style.display="none";
       document.getElementById("battleScreen").style.display="block";
       document.getElementById("cardBar").style.display="flex";
