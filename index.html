@@ -290,7 +290,6 @@
           const btn = el.querySelector('.buy-btn');
           btn.onclick = ()=>{
             btn.disabled = true; btn.textContent = "Buying...";
-            // atomic coins deduction (no negatives), then grant card
             playerRef.child("coins").transaction(v=>{
               v=v||0; if(v < c.price) return; return v - c.price;
             }, (err, committed)=>{
@@ -299,9 +298,7 @@
                 alert("Not enough coins or network error.");
                 return;
               }
-              playerRef.child("ownedCards/"+c.name).set(true).then(()=>{
-                // on("value") listener will refresh shop/deck automatically
-              });
+              playerRef.child("ownedCards/"+c.name).set(true);
             });
           };
         }
@@ -327,8 +324,8 @@
     setInterval(updateElixir, 200);
 
     /************ Matchmaking (strict 1v1; multiple rooms) ************/
-    let roomId=null, mySide=null, searching=false, battleReady=false;
-    let actionsRef=null, roomPlayersRef=null, queueAdded=false, pairInterval=null;
+    let roomId=null, mySide=null, searching=false, battleReady=false, isHost=false, hostId=null;
+    let roomRef=null, actionsRef=null, stateRef=null, roomPlayersRef=null, queueAdded=false, pairInterval=null;
 
     function findMatch(){
       document.getElementById("statusText").innerText="Searching...";
@@ -346,7 +343,7 @@
       if(pairInterval) clearInterval(pairInterval);
       pairInterval = setInterval(()=>{ if(searching && !roomId) attemptPair(); }, 1500);
 
-      // Also listen if someone pairs us
+      // If someone else pairs us into a room
       db.ref("rooms").on("child_added", snap=>{
         if(!searching || roomId) return;
         const r=snap.val();
@@ -369,9 +366,8 @@
           const ts = typeof it.ts==='number' ? it.ts : Date.now();
           if(ts<bestTs){ bestTs=ts; cand=k; }
         });
-        if(!cand) return; // nobody else → keep searching
+        if(!cand) return;
 
-        // atomic claim
         db.ref("queue/"+cand+"/claimed").transaction(val=>{
           if(val) return; return playerId;
         }, async (err, committed, snap2)=>{
@@ -384,6 +380,7 @@
           const roomData={
             createdAt: firebase.database.ServerValue.TIMESTAMP,
             state:"active",
+            host: playerId, // I am host (authoritative)
             players:{
               [playerId]:{connected:true,side:"blue",name:playerName},
               [cand]:{connected:true,side:"red",name:oppName}
@@ -408,7 +405,7 @@
       document.getElementById("cancelBtn").style.display="none";
     }
 
-    // Rejoin an active room if you refreshed
+    // Rejoin if refreshed
     function tryRejoinRoom(){
       db.ref("rooms").once("value").then(s=>{
         s.forEach(r=>{
@@ -430,18 +427,21 @@
     const ctx=canvas.getContext("2d");
     const towerImg=new Image(); towerImg.src="mini-castle.png";
 
-    // Arena geometry (used for drawing AND pathing)
+    // Arena geometry (pathing)
     const RIVER_H = 40;
     const BRIDGE_W = 140;
     const RIVER_Y = canvas.height/2 - RIVER_H/2;
     const BRIDGE_CENTERS = [220, 580]; // x centers
 
+    // State
     let towers=[], units=[], selectedCard=null;
     let placementCircle=null, lastMouse={x:canvas.width/2, y:canvas.height*0.75};
     const cardCooldowns={}; // name -> timestamp
     let projectiles=[]; // tower shots
     let gameOver=false;
-    let nameBlue="Blue", nameRed="Red"; // populated from room
+    let nameBlue="Blue", nameRed="Red"; // from room
+    let pendingActionKeys=new Set(); // host: dedupe actions
+    let publishTimer=0, PUBLISH_MS=100; // host publishes ~10fps
 
     // Hand (owned cards)
     function renderHand(owned){
@@ -492,7 +492,7 @@
       placementCircle = clampToHalf(lastMouse.x, lastMouse.y);
     });
 
-    // Drop card (only when 2 players are connected)
+    // Drop card → push action (host will process)
     canvas.addEventListener("click", e=>{
       if(!battleReady) return;
       if(!selectedCard) return;
@@ -505,14 +505,15 @@
       cardCooldowns[selectedCard.name]=Date.now()+5000;
       refreshCooldownStyles();
 
-      const action={ player:playerId, card:selectedCard, x, y, timestamp:Date.now() };
-      db.ref("rooms/"+roomId+"/actions").push(action);
+      db.ref("rooms/"+roomId+"/actions").push({
+        player:playerId, card:selectedCard, x, y, timestamp:Date.now()
+      });
 
       selectedCard=null; placementCircle=null;
       document.querySelectorAll("#cardBar .card").forEach(c=>c.classList.remove("selected"));
     });
 
-    /* Arena draw with TWO BRIDGES and river */
+    /* Drawing helpers */
     function drawArena(){
       // grass
       const g=ctx.createLinearGradient(0,0,0,canvas.height);
@@ -528,15 +529,12 @@
       ctx.fillStyle="#6e5537";
       bridges.forEach(b=>{
         ctx.fillRect(b.x, b.y, BRIDGE_W, RIVER_H+12);
-        // planks
         ctx.fillStyle="#7a6040";
-        for(let i=0;i<BRIDGE_W;i+=18){
-          ctx.fillRect(b.x+i+2, b.y, 8, RIVER_H+12);
-        }
+        for(let i=0;i<BRIDGE_W;i+=18){ ctx.fillRect(b.x+i+2, b.y, 8, RIVER_H+12); }
         ctx.fillStyle="#6e5537";
       });
 
-      // lane lines
+      // lanes
       ctx.strokeStyle="rgba(255,255,255,0.15)"; ctx.lineWidth=2;
       ctx.beginPath(); ctx.moveTo(0, canvas.height/3); ctx.lineTo(canvas.width, canvas.height/3); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, canvas.height*2/3); ctx.lineTo(canvas.width, canvas.height*2/3); ctx.stroke();
@@ -550,7 +548,6 @@
       const size = t.king ? 60 : 50;
       if(towerImg.complete){ ctx.drawImage(towerImg, t.x-size/2, t.y-size/2, size, size); }
       else{ ctx.fillStyle=t.side==="blue"?"#5ec8ff":"#ff6b6b"; ctx.fillRect(t.x-size/2, t.y-size/2, size, size); }
-      // HP bar
       const maxHp = t.king?1000:600;
       ctx.fillStyle="#900"; ctx.fillRect(t.x-28, t.y-(size/2)-10, 56, 6);
       ctx.fillStyle="#3f3"; ctx.fillRect(t.x-28, t.y-(size/2)-10, 56*(Math.max(0,t.hp)/maxHp), 6);
@@ -564,29 +561,9 @@
       ctx.fillStyle='white'; ctx.fillText(nm, t.x, y);
     }
 
-    function pickNearestBridgeX(x){
-      const a=BRIDGE_CENTERS[0], b=BRIDGE_CENTERS[1];
-      return (Math.abs(x-a) <= Math.abs(x-b)) ? a : b;
-    }
-
-    function spawnUnit(card, side, x, y){
-      const slowFactor = 0.30; // MUCH slower (keeps animation feel)
-      const speed = Math.max(0.35, card.speed * slowFactor);
-
-      const bridgeX = pickNearestBridgeX(x);
-      const startTargetY = side==='blue' ? (RIVER_Y + RIVER_H + 8) : (RIVER_Y - 8);
-
-      units.push({
-        name:card.name, hp:card.hp, maxHp:card.maxHp, dmg:card.dmg, range:card.range,
-        speed, side, x, y, cooldown:0, dir:(side==="blue" ? -1 : 1),
-        pathStage:'toBridge', targetX: bridgeX, targetY: startTargetY
-      });
-    }
-
     function drawUnit(u){
       ctx.fillStyle = (u.side==="blue") ? "#8de1ff" : "#ff7f7f";
       ctx.beginPath(); ctx.arc(u.x, u.y, 14, 0, Math.PI*2); ctx.fill();
-      // simple leg jiggle
       const step = Math.sin(Date.now()/120)*4;
       ctx.strokeStyle=(u.side==="blue")?"#c7f1ff":"#ffd1d1"; ctx.lineWidth=3;
       ctx.beginPath(); ctx.moveTo(u.x-8, u.y+14); ctx.lineTo(u.x-8, u.y+20+step); ctx.stroke();
@@ -594,6 +571,24 @@
       // hp bar
       ctx.fillStyle="#900"; ctx.fillRect(u.x-15, u.y-24, 30, 5);
       ctx.fillStyle="#3f3"; ctx.fillRect(u.x-15, u.y-24, 30*(u.hp/u.maxHp), 5);
+    }
+
+    /************ Simulation (host-only) ************/
+    function pickNearestBridgeX(x){
+      const a=BRIDGE_CENTERS[0], b=BRIDGE_CENTERS[1];
+      return (Math.abs(x-a) <= Math.abs(x-b)) ? a : b;
+    }
+
+    function spawnUnit(card, side, x, y){
+      const slowFactor = 0.30; // slower
+      const speed = Math.max(0.35, card.speed * slowFactor);
+      const bridgeX = pickNearestBridgeX(x);
+      const startTargetY = side==='blue' ? (RIVER_Y + RIVER_H + 8) : (RIVER_Y - 8);
+      units.push({
+        name:card.name, hp:card.hp, maxHp:card.maxHp, dmg:card.dmg, range:card.range,
+        speed, side, x, y, cooldown:0, dir:(side==="blue" ? -1 : 1),
+        pathStage:'toBridge', targetX: bridgeX, targetY: startTargetY
+      });
     }
 
     function moveTowards(u, tx, ty){
@@ -607,12 +602,9 @@
 
     function updateUnits(){
       units.forEach(u=>{
-        // Pathing: force bridge crossing
         if(u.pathStage==='toBridge'){
           if(moveTowards(u, u.targetX, u.targetY)){
-            // next: crossing to the other side
             u.pathStage='crossing';
-            u.targetX = u.targetX;
             u.targetY = (u.side==='blue') ? (RIVER_Y - 8) : (RIVER_Y + RIVER_H + 8);
           }
         } else if(u.pathStage==='crossing'){
@@ -620,21 +612,19 @@
             u.pathStage='toTarget';
           }
         } else {
-          // toTarget: proceed straight toward enemy territory
           u.y += u.dir * u.speed;
         }
 
-        // cooldown tick
         if(u.cooldown>0) u.cooldown--;
 
-        // attack towers on contact
+        // Towers contact damage
         for(const t of towers){
           if(t.side===u.side || t.hp<=0) continue;
           const dx=Math.abs(u.x - t.x), dy=Math.abs(u.y - t.y);
           if(dx<30 && dy<30){
             if(u.cooldown<=0){
               t.hp -= u.dmg;
-              u.cooldown = 30; // ~0.5s
+              u.cooldown = 30;
             }
           }
         }
@@ -642,7 +632,6 @@
       units = units.filter(u=>u.hp>0);
     }
 
-    /* Tower AI (auto-shoot) */
     function updateTowersAI(){
       towers.forEach(t=>{
         if(t.hp<=0) return;
@@ -650,7 +639,6 @@
         const range = t.range || (t.king?250:200);
         if(t.cd>0) return;
 
-        // find nearest enemy unit in range
         let best=null, bestD2=Infinity;
         for(const u of units){
           if(u.side===t.side) continue;
@@ -664,7 +652,7 @@
           const mag=Math.max(0.001, Math.hypot(dx,dy));
           const vx=speed*dx/mag, vy=speed*dy/mag;
           projectiles.push({x:t.x, y:t.y, vx, vy, dmg:(t.dmg|| (t.king?35:22)), side:t.side});
-          t.cd = t.cdMax || 60; // ~1s at 60fps
+          t.cd = t.cdMax || 60;
         }
       });
     }
@@ -672,7 +660,6 @@
       const radius=5;
       projectiles.forEach(p=>{
         p.x += p.vx; p.y += p.vy;
-        // hit unit?
         for(const u of units){
           if(u.side===p.side) continue;
           const dx=u.x-p.x, dy=u.y-p.y;
@@ -682,22 +669,15 @@
             break;
           }
         }
-        // out of bounds
         if(p.x<-20||p.x>canvas.width+20||p.y<-20||p.y>canvas.height+20) p.dead=true;
       });
       projectiles = projectiles.filter(p=>!p.dead);
     }
-    function drawProjectiles(){
-      ctx.fillStyle="#ffd86b";
-      projectiles.forEach(p=>{
-        ctx.beginPath(); ctx.arc(p.x,p.y,5,0,Math.PI*2); ctx.fill();
-      });
-    }
 
     function endGame(winnerColor){
       if(gameOver) return; gameOver=true;
-      db.ref("rooms/"+roomId+"/state").set("ended");
-      db.ref("rooms/"+roomId+"/winner").set(winnerColor);
+      roomRef.child("state").set("ended");
+      roomRef.child("winner").set(winnerColor);
       const iWon = (winnerColor==="Blue" && mySide==="blue") || (winnerColor==="Red" && mySide==="red");
       if(iWon){
         playerRef.child("coins").transaction(c=>(c||0)+100);
@@ -710,11 +690,11 @@
 
     function leaveRoomAndMaybeDelete(){
       if(!roomId) return;
-      const myRef = db.ref("rooms/"+roomId+"/players/"+playerId);
-      myRef.update({connected:false, lastSeen: firebase.database.ServerValue.TIMESTAMP});
-      db.ref("rooms/"+roomId+"/players").once("value").then(s=>{
+      const myPlayerNode = roomRef.child("players/"+playerId);
+      myPlayerNode.update({connected:false, lastSeen: firebase.database.ServerValue.TIMESTAMP});
+      roomRef.child("players").once("value").then(s=>{
         let any=false; s.forEach(p=>{ if(p.val() && p.val().connected) any=true; });
-        if(!any){ db.ref("rooms/"+roomId).remove(); }
+        if(!any){ roomRef.remove(); }
       });
     }
 
@@ -723,9 +703,32 @@
       leaveRoomAndMaybeDelete();
     });
 
+    /* Host/non-host wiring */
+    function attachHostListeners(){
+      // Host processes actions (spawns)
+      actionsRef.on("child_added", snap=>{
+        const key=snap.key;
+        if(pendingActionKeys.has(key)) return;
+        pendingActionKeys.add(key);
+        const a=snap.val();
+        const side = (a.player===playerId) ? mySide : (mySide==="blue"?"red":"blue");
+        spawnUnit(a.card, side, a.x, a.y);
+      });
+    }
+    function attachClientStateListener(){
+      // Non-host: listen to authoritative state
+      stateRef.on("value", snap=>{
+        const st=snap.val();
+        if(!st) return;
+        // deep copy to our local draw state
+        towers = (st.towers||[]).map(t=>({...t}));
+        units  = (st.units ||[]).map(u=>({...u}));
+      });
+    }
+
     /* Names from room */
     async function loadRoomNames(){
-      const playersSnap = await db.ref("rooms/"+roomId+"/players").once("value");
+      const playersSnap = await roomRef.child("players").once("value");
       let blueId=null, redId=null;
       playersSnap.forEach(ch=>{
         const v=ch.val(); if(!v) return;
@@ -740,36 +743,51 @@
       nameRed  = rNameSnap.val() || "Red";
     }
 
-    /* Main battle loop */
-    function drawLoop(){
+    /* Main draw loop (both sides draw; only host simulates + publishes) */
+    let lastPublishTime=0;
+    function drawLoop(ts){
       // arena
       drawArena();
 
-      // towers (draw)
+      // draw towers
       towers.forEach(t=> drawTower(t));
 
-      // names on king castles
+      // names by king towers
       const kBlue = towers.find(t=>t.side==="blue" && t.king);
       const kRed  = towers.find(t=>t.side==="red"  && t.king);
       if(kBlue) drawTowerName(kBlue, nameBlue);
       if(kRed)  drawTowerName(kRed,  nameRed);
 
-      // win check (after drawing so names stay visible)
-      towers.forEach(t=>{
-        if(!gameOver && t.hp<=0 && t.king){
-          const winner = (t.side==="blue") ? "Red" : "Blue";
-          endGame(winner);
-        }
-      });
+      // host sim step
+      if(isHost && !gameOver){
+        updateTowersAI();
+        updateUnits();
+        updateProjectiles();
 
-      // AI + units + projectiles
-      updateTowersAI();
-      updateUnits();
-      updateProjectiles();
-      drawProjectiles();
+        // winner check (host only)
+        for(const t of towers){
+          if(t.hp<=0 && t.king){
+            const winner = (t.side==="blue") ? "Red" : "Blue";
+            endGame(winner);
+            break;
+          }
+        }
+
+        // publish authoritative state ~10fps
+        if(ts - lastPublishTime >= PUBLISH_MS){
+          lastPublishTime = ts;
+          stateRef.set({
+            towers: towers.map(t=>({x:t.x,y:t.y,hp:t.hp,side:t.side,king:!!t.king})),
+            units:  units.map(u=>({x:u.x,y:u.y,hp:u.hp,maxHp:u.maxHp,side:u.side,name:u.name}))
+          });
+        }
+      }
+
+      // draw units + projectiles
+      projectiles.forEach(p=>{ ctx.fillStyle="#ffd86b"; ctx.beginPath(); ctx.arc(p.x,p.y,5,0,Math.PI*2); ctx.fill(); });
       units.forEach(drawUnit);
 
-      // placement circle
+      // placement ring
       if(placementCircle && selectedCard){
         ctx.beginPath(); ctx.arc(placementCircle.x, placementCircle.y, 24, 0, Math.PI*2);
         ctx.strokeStyle="#fff"; ctx.lineWidth=2; ctx.stroke();
@@ -782,69 +800,85 @@
       searching=false; db.ref("queue/"+playerId).remove();
       if(pairInterval){ clearInterval(pairInterval); pairInterval=null; }
 
-      // show battle UI
+      // UI
       document.getElementById("menuScreen").style.display="none";
       document.getElementById("battleScreen").style.display="block";
       document.getElementById("cardBar").style.display="flex";
       document.getElementById("elixirBar").style.display="flex";
       document.getElementById("statusText").innerText="In Battle (waiting for opponent…)";
 
+      // state refs
+      roomRef = db.ref("rooms/"+roomId);
+      actionsRef = roomRef.child("actions");
+      stateRef   = roomRef.child("authoritativeState");
+      roomPlayersRef = roomRef.child("players");
+
+      // host id & role
+      roomRef.child("host").on("value", snap=>{
+        hostId = snap.val();
+        isHost = (hostId === playerId);
+      });
+
+      // ensure we’re connected in room
+      roomRef.child("players/"+playerId).update({connected:true, side:mySide, name:playerName});
+      roomRef.child("players/"+playerId).onDisconnect().update({connected:false, lastSeen: firebase.database.ServerValue.TIMESTAMP});
+
+      // detect both players connected
+      roomPlayersRef.on("value", s=>{
+        let connected=0, hostConnected=false, otherId=null;
+        s.forEach(p=>{
+          const v=p.val(); if(!v) return;
+          if(v.connected) connected++;
+          if(p.key===hostId) hostConnected=!!v.connected;
+          if(p.key!==playerId) otherId=p.key;
+        });
+        battleReady = (connected>=2);
+        document.getElementById("statusText").innerText = battleReady ? "In Battle" : "In Battle (waiting for opponent…)";
+
+        // Host migration: if host missing and I'm connected, try to become host
+        if(!hostConnected && battleReady && hostId!==playerId){
+          roomRef.child("host").transaction(v => v || playerId);
+        }
+      });
+
+      // load names
+      loadRoomNames();
+
       // init elixir & bar
       elixir=5; lastElixirTime=Date.now(); initElixirBar();
 
-      // towers (two princess + one big king per side)
+      // set up towers initial (same for both)
       towers=[
-        // Blue side (bottom)
+        // Blue
         {x:200,y:560,hp:600,side:"blue",king:false, range:200, dmg:22, cdMax:60},
         {x:600,y:560,hp:600,side:"blue",king:false, range:200, dmg:22, cdMax:60},
         {x:400,y:640,hp:1000,side:"blue",king:true,  range:250, dmg:35, cdMax:60},
-        // Red side (top)
+        // Red
         {x:200,y:140,hp:600,side:"red",king:false, range:200, dmg:22, cdMax:60},
         {x:600,y:140,hp:600,side:"red",king:false, range:200, dmg:22, cdMax:60},
         {x:400,y:60, hp:1000,side:"red",king:true,  range:250, dmg:35, cdMax:60}
       ];
       units=[]; projectiles=[]; gameOver=false; selectedCard=null; placementCircle=null; battleReady=false;
+      pendingActionKeys.clear();
 
-      // ensure our player row in room has our name
-      db.ref("rooms/"+roomId+"/players/"+playerId).update({connected:true, side:mySide, name:playerName});
-      db.ref("rooms/"+roomId+"/players/"+playerId).onDisconnect().update({connected:false, lastSeen: firebase.database.ServerValue.TIMESTAMP});
+      // owned → hand
+      playerRef.child("ownedCards").once("value").then(s=>{ renderHand(s.val()||{}); });
 
-      // wait for both players → only then allow dropping units
-      roomPlayersRef = db.ref("rooms/"+roomId+"/players");
-      roomPlayersRef.on("value", s=>{
-        let connected=0; s.forEach(p=>{ if(p.val() && p.val().connected) connected++; });
-        battleReady = (connected>=2);
-        document.getElementById("statusText").innerText = battleReady ? "In Battle" : "In Battle (waiting for opponent…)";
-      });
+      // host/client listeners
+      if(isHost){ attachHostListeners(); }
+      else     { attachClientStateListener(); }
 
-      // load names for drawing near castles
-      loadRoomNames();
-
-      // load owned & render hand
-      playerRef.child("ownedCards").once("value").then(s=>{
-        renderHand(s.val()||{});
-      });
-
-      // actions listener (sync spawns)
-      if(actionsRef) actionsRef.off();
-      actionsRef = db.ref("rooms/"+roomId+"/actions");
-      actionsRef.on("child_added", snap=>{
-        const a=snap.val();
-        const side = (a.player===playerId) ? mySide : (mySide==="blue"?"red":"blue");
-        spawnUnit(a.card, side, a.x, a.y);
+      // winner listener (non-host will also get this to show banner)
+      roomRef.child("winner").on("value", snap=>{
+        const w=snap.val(); if(!w || gameOver) return;
+        const iWon = (w==="Blue" && mySide==="blue") || (w==="Red" && mySide==="red");
+        gameOver=true;
+        document.getElementById("resultText").innerText = iWon ? "🏆 Victory!" : "❌ Defeat";
+        document.getElementById("rewardText").innerText = iWon ? "+100 Coins, +5 Trophies" : "Better luck next time!";
+        document.getElementById("resultScreen").style.display="block";
       });
 
       requestAnimationFrame(drawLoop);
-    }
-
-    function leaveRoomAndMaybeDelete(){
-      if(!roomId) return;
-      const myRef = db.ref("rooms/"+roomId+"/players/"+playerId);
-      myRef.update({connected:false, lastSeen: firebase.database.ServerValue.TIMESTAMP});
-      db.ref("rooms/"+roomId+"/players").once("value").then(s=>{
-        let any=false; s.forEach(p=>{ if(p.val() && p.val().connected) any=true; });
-        if(!any){ db.ref("rooms/"+roomId).remove(); }
-      });
     }
 
     function returnToMenu(){
@@ -856,13 +890,16 @@
       document.getElementById("statusText").innerText="Idle";
 
       if(actionsRef) actionsRef.off();
+      if(stateRef)   stateRef.off();
       if(roomPlayersRef) roomPlayersRef.off();
+      if(roomRef) roomRef.child("host").off();
+      roomRef=null; actionsRef=null; stateRef=null; roomPlayersRef=null;
 
       leaveRoomAndMaybeDelete();
 
       placementCircle=null; selectedCard=null; gameOver=false;
       roomId=null; mySide=null; searching=false; battleReady=false;
-      queueAdded=false;
+      queueAdded=false; isHost=false; hostId=null;
     }
   </script>
 </body>
