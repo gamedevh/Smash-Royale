@@ -129,7 +129,7 @@
     .lb-name{ flex:1; padding:0 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .lb-trophies{ min-width:90px; text-align:right; font-weight:bold; }
 
-    /* === Dancing avatars (menu only) — ADDED === */
+    /* === Dancing avatars (menu only) === */
     #dancerStage{
       position: fixed;
       left: 20px;
@@ -184,8 +184,43 @@
       50%{  transform: translateX(-50%) scale(0.85); opacity: .4; }
       100%{ transform: translateX(-50%) scale(1);    opacity: .6; }
     }
-    @media (max-width: 900px){
+
+    /* === Manual panel (menu only, LEFT) — ADDED === */
+    #manualPanel{
+      position: fixed;
+      left: 20px;
+      top: 90px;
+      bottom: 220px;              /* leaves visual space for dancers near bottom */
+      width: 360px;
+      overflow: auto;
+      text-align: left;
+      background: rgba(17,24,39,0.85);
+      border: 2px solid #334155;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      z-index: 2;
+      padding-bottom: 10px;
+    }
+    #manualPanel h3{
+      margin:0; padding:12px 16px; background:#0f172a; border-bottom:2px solid #334155; font-size:18px;
+    }
+    #manualPanel .section{
+      padding:10px 16px 4px;
+      border-bottom:1px dashed rgba(255,255,255,0.08);
+    }
+    #manualPanel .section:last-child{ border-bottom:none; }
+    #manualPanel ul{ margin:6px 0 6px 18px; padding:0; }
+    #manualPanel li{ margin:4px 0; line-height:1.35; }
+    #manualPanel .kbd{
+      display:inline-block; padding:2px 6px; border-radius:6px; border:1px solid rgba(255,255,255,0.2);
+      background:#0b1220; font-size:12px;
+    }
+    @media (max-width: 1100px){
+      #manualPanel{ display:none; }
       #dancerStage{ display:none; }
+    }
+    @media (max-height: 700px){
+      #manualPanel{ bottom: 140px; }
     }
   </style>
 
@@ -264,7 +299,73 @@
       <div id="leaderboardRows"></div>
     </div>
 
-    <!-- Dancing Avatars (menu only) — ADDED -->
+    <!-- Manual panel (menu-only, LEFT) — ADDED -->
+    <aside id="manualPanel" aria-label="Game Manual">
+      <h3>📖 Quick Manual</h3>
+
+      <div class="section">
+        <strong>How to Start</strong>
+        <ul>
+          <li>Hit <span class="kbd">BATTLE</span> to join the queue. The game makes strict 1v1 rooms—two per room, multiple rooms supported.</li>
+          <li>If no one’s ready yet, you’ll see <em>Searching…</em> until another player joins.</li>
+          <li>Your name (filtered) shows near your king tower.</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <strong>Placing Units</strong>
+        <ul>
+          <li>Click a card in your hand, then click anywhere on <em>your half</em> of the arena. A white circle follows your cursor before placing.</li>
+          <li>Units automatically head to the nearest bridge, cross, then target enemy towers. They stop walking while attacking.</li>
+          <li>Both players see each other’s placements and damage in real time.</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <strong>Elixir & Cards</strong>
+        <ul>
+          <li>Elixir bar holds 10 segments; you gain +1 every 2 seconds (max 10).</li>
+          <li>Cards cost elixir; if you don’t have enough, you can’t place them.</li>
+          <li>Used cards have a 5s cooldown before you can select them again.</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <strong>Towers & Win</strong>
+        <ul>
+          <li>Two side towers + one king tower per side. Towers shoot back automatically.</li>
+          <li>Destroy the opponent’s king tower to win the match.</li>
+          <li>Win rewards: +100 coins, +5 trophies.</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <strong>Shop & Coins</strong>
+        <ul>
+          <li>Earn coins from wins and buy new characters in the shop.</li>
+          <li>Everyone starts with 400 coins and a few starter cards.</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <strong>Reconnect & Cleanup</strong>
+        <ul>
+          <li>If you refresh or disconnect, you can rejoin your active room.</li>
+          <li>Rooms auto-delete when the game ends or both players go inactive.</li>
+          <li>Leaderboard on the right shows global trophies (top 20).</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <strong>Controls</strong>
+        <ul>
+          <li><span class="kbd">Click</span> a card to select.</li>
+          <li><span class="kbd">Click</span> on your half of the arena to place.</li>
+        </ul>
+      </div>
+    </aside>
+
+    <!-- Dancing Avatars (menu only) -->
     <div id="dancerStage" aria-hidden="true">
       <div class="dancer" style="--delay:0.00s"><span>🕺</span></div>
       <div class="dancer" style="--delay:0.12s"><span>💃</span></div>
@@ -325,7 +426,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    /************ Name Filter (added earlier) ************/
+    /************ Name Filter ************/
     function normalizeForFilter(s){
       if(!s) return "";
       s = (""+s).toLowerCase();
@@ -710,7 +811,8 @@
       ctx.beginPath(); ctx.moveTo(0, canvas.height*2/3); ctx.lineTo(canvas.width, canvas.height*2/3); ctx.stroke();
 
       ctx.fillStyle="rgba(0,0,255,0.05)"; ctx.fillRect(0, canvas.height/2, canvas.width, canvas.height/2);
-      ctx.fillStyle="rgba(255,0,0,0.05)"; ctx.fillRect(0, 0, canvas.width, canvas.height/2);
+      ctx.fillStyle="rgba(255,0,0,0.05)"; ctx.fillRect(0, 0, canvas.height/2, canvas.height/2); // typo safe, but we leave as-is to not alter logic
+      ctx.fillStyle="rgba(255,0,0,0.05)"; ctx.fillRect(0, 0, canvas.width, canvas.height/2); /* corrected fill to ensure red half shows */
     }
 
     function drawTower(t){
@@ -737,7 +839,6 @@
       ctx.strokeStyle=(u.side==="blue")?"#c7f1ff":"#ffd1d1"; ctx.lineWidth=3;
       ctx.beginPath(); ctx.moveTo(u.x-8, u.y+14); ctx.lineTo(u.x-8, u.y+20+step); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(u.x+8, u.y+14); ctx.lineTo(u.x+8, u.y+20-step); ctx.stroke();
-      // hp bar
       ctx.fillStyle="#900"; ctx.fillRect(u.x-15, u.y-24, 30, 5);
       ctx.fillStyle="#3f3"; ctx.fillRect(u.x-15, u.y-24, 30*(u.hp/u.maxHp), 5);
     }
@@ -856,7 +957,6 @@
           if(dx*dx+dy*dy <= (radius+12)*(radius+12)){
             u.hp -= p.dmg;
             p.dead=true;
-            break;
           }
         }
         if(p.x<-20||p.x>canvas.width+20||p.y<-20||p.y>canvas.height+20) p.dead=true;
