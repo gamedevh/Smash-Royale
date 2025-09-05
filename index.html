@@ -8,11 +8,7 @@
       --hud-bg: rgba(10,15,30,0.70);
       --hud-border:#1e3d59;
     }
-    /* Keep body simple; we draw menu bg via inline SVG behind everything */
-    body{
-      margin:0; font-family:Arial, sans-serif; color:#fff; user-select:none; overflow:hidden;
-      background:#0b0f1c;
-    }
+    body{ margin:0; font-family:Arial, sans-serif; color:#fff; user-select:none; overflow:hidden; background:#0b0f1c; }
 
     /* Top HUD */
     .top-bar{
@@ -24,7 +20,7 @@
     .currency div{background:#2d3e50; padding:5px 12px; border-radius:8px; display:flex; align-items:center; gap:6px;}
     #onlineCount{ margin-left:12px; font-weight:bold; }
 
-    /* Menu & Battle screens */
+    /* Screens */
     .screen{ display:none; height:calc(100vh - 56px); position:relative; }
     #menuScreen{ display:block; text-align:center; padding-bottom:120px; overflow:auto; }
     #battleScreen{ display:none; text-align:center; position:relative; }
@@ -57,11 +53,9 @@
     .shop .owned{ margin-top:6px; padding:6px 10px; border-radius:8px; border:2px solid #888; background:#444; color:#aaa; }
 
     /* Procedural menu background (SVG) */
-    #menuBg{
-      position:fixed; inset:0; z-index:0; pointer-events:none;
-    }
+    #menuBg{ position:fixed; inset:0; z-index:0; pointer-events:none; }
 
-    /* Arena (drawn on canvas) */
+    /* Arena canvas */
     #battleCanvas{
       position:relative; background:transparent; border:3px solid #fff; margin:20px auto 0; display:block; z-index:1;
     }
@@ -122,42 +116,24 @@
         <stop offset="100%" stop-color="#0a1524"/>
       </linearGradient>
     </defs>
-    <!-- Sky -->
     <rect width="1920" height="1080" fill="url(#sky)"/>
-    <!-- Distant hills -->
     <path d="M0,720 C300,640 500,700 800,660 C1150,610 1450,690 1920,620 L1920,1080 L0,1080 Z" fill="#0c162e"/>
     <path d="M0,760 C350,700 550,760 850,740 C1200,710 1500,760 1920,700 L1920,1080 L0,1080 Z" fill="#0e1a35"/>
-    <!-- Ground fog -->
     <rect y="650" width="1920" height="430" fill="url(#mist)"/>
-    <!-- Castle silhouette -->
     <g transform="translate(960,520) scale(1.0)" fill="#1a2748" opacity="0.9">
-      <!-- base wall -->
       <rect x="-260" y="-60" width="520" height="200"/>
-      <!-- left tower -->
-      <rect x="-330" y="-150" width="70" height="290"/>
-      <rect x="-330" y="-190" width="70" height="40"/>
-      <!-- right tower -->
-      <rect x="260" y="-150" width="70" height="290"/>
-      <rect x="260" y="-190" width="70" height="40"/>
-      <!-- center keep -->
-      <rect x="-90" y="-220" width="180" height="360"/>
-      <polygon points="-90,-220 0,-320 90,-220"/>
-      <!-- teeth -->
+      <rect x="-330" y="-150" width="70" height="290"/><rect x="-330" y="-190" width="70" height="40"/>
+      <rect x="260" y="-150" width="70" height="290"/><rect x="260" y="-190" width="70" height="40"/>
+      <rect x="-90" y="-220" width="180" height="360"/><polygon points="-90,-220 0,-320 90,-220"/>
       <g>
-        <rect x="-260" y="-60" width="30" height="30"/>
-        <rect x="-210" y="-60" width="30" height="30"/>
-        <rect x="-160" y="-60" width="30" height="30"/>
-        <rect x="-110" y="-60" width="30" height="30"/>
-        <rect x="-60" y="-60" width="30" height="30"/>
-        <rect x="-10" y="-60" width="30" height="30"/>
-        <rect x="40" y="-60" width="30" height="30"/>
-        <rect x="90" y="-60" width="30" height="30"/>
-        <rect x="140" y="-60" width="30" height="30"/>
-        <rect x="190" y="-60" width="30" height="30"/>
+        <rect x="-260" y="-60" width="30" height="30"/><rect x="-210" y="-60" width="30" height="30"/>
+        <rect x="-160" y="-60" width="30" height="30"/><rect x="-110" y="-60" width="30" height="30"/>
+        <rect x="-60" y="-60" width="30" height="30"/><rect x="-10" y="-60" width="30" height="30"/>
+        <rect x="40" y="-60" width="30" height="30"/><rect x="90" y="-60" width="30" height="30"/>
+        <rect x="140" y="-60" width="30" height="30"/><rect x="190" y="-60" width="30" height="30"/>
         <rect x="240" y="-60" width="30" height="30"/>
       </g>
     </g>
-    <!-- Foreground gradient -->
     <rect y="800" width="1920" height="280" fill="url(#ground)"/>
   </svg>
 
@@ -220,21 +196,18 @@
 
     const playerRef = db.ref("players/"+playerId);
 
-    // Initialize if missing, set starting coins=400; don't overwrite existing progress
+    // Initialize if missing; start with 400 coins (legacy users without coins also set to 400 once)
     playerRef.once("value").then(snap=>{
       if(!snap.exists()){
         playerRef.set({
-          name: playerName,
-          online: true,
-          disconnected: false,
-          coins: 400,           // start with 400
-          trophies: 0,
+          name: playerName, online: true, disconnected: false,
+          coins: 400, trophies: 0,
           ownedCards: { "Knight": true, "Archer": true, "Golem": true, "Dragon": true }
         });
       } else {
         const p = snap.val()||{};
         const updates = { name:playerName, online:true, disconnected:false };
-        if(p.coins === undefined || p.coins === null) updates.coins = 400; // one-time default for legacy users
+        if(p.coins===undefined || p.coins===null) updates.coins = 400;
         playerRef.update(updates);
       }
     });
@@ -285,7 +258,7 @@
       {name:"Mega Minion",hp:140,maxHp:140,dmg:30,range:50,cost:3,speed:3,img:"https://img.icons8.com/color/96/minion.png", price:350}
     ];
 
-    // Render deck + shop
+    /* Deck + Shop render */
     function renderDeck(owned){
       const deckEl = document.getElementById("deck");
       deckEl.innerHTML="";
@@ -301,7 +274,7 @@
     function renderShop(owned, coins){
       const shop = document.getElementById("shop"); shop.innerHTML="";
       allCards.forEach(c=>{
-        if(c.price<=0) return; // skip free starters
+        if(c.price<=0) return;
         const ownedFlag = !!owned[c.name];
         const el = document.createElement("div");
         el.className="card";
@@ -342,9 +315,9 @@
     }
     setInterval(updateElixir, 200);
 
-    /************ Matchmaking ************/
-    let roomId=null, mySide=null, searching=false;
-    let actionsRef=null, roomPlayersRef=null;
+    /************ Matchmaking (rooms of 2; many rooms supported) ************/
+    let roomId=null, mySide=null, searching=false, battleReady=false;
+    let actionsRef=null, roomPlayersRef=null, queueAdded=false;
 
     function findMatch(){
       document.getElementById("statusText").innerText="Searching...";
@@ -352,47 +325,73 @@
       document.getElementById("cancelBtn").style.display="inline-block";
       searching=true;
 
-      const queueRef=db.ref("queue");
-      queueRef.once("value").then(snap=>{
-        const q=snap.val();
-        if(q){
-          const oppId=Object.keys(q)[0];
-          roomId="room-"+Date.now();
-          mySide="blue";
+      const myQueueRef = db.ref("queue/"+playerId);
+      if(!queueAdded){
+        myQueueRef.set({ name:playerName, ts:firebase.database.ServerValue.TIMESTAMP, searching:true });
+        myQueueRef.onDisconnect().remove();
+        queueAdded=true;
+      }
+      attemptPair();
+      // Also listen if someone pairs us
+      db.ref("rooms").on("child_added", snap=>{
+        if(!searching || roomId) return;
+        const r=snap.val();
+        if(r && r.players && r.players[playerId]){
+          roomId=snap.key;
+          mySide = r.players[playerId].side || "red";
+          startBattle();
+        }
+      });
+    }
+
+    function attemptPair(){
+      db.ref("queue").once("value").then(snap=>{
+        if(!searching || roomId) return;
+        const q = snap.val()||{};
+        // choose oldest other player without claimed
+        let cand=null, bestTs=Infinity;
+        Object.keys(q).forEach(k=>{
+          if(k===playerId) return;
+          const it=q[k]; if(!it || it.claimed) return;
+          const ts = typeof it.ts==='number' ? it.ts : Date.now();
+          if(ts<bestTs){ bestTs=ts; cand=k; }
+        });
+        if(!cand) return; // none yet, will get paired by someone else or try later
+        // try to claim the opponent atomically
+        db.ref("queue/"+cand+"/claimed").transaction(val=>{
+          if(val) return; return playerId;
+        }, (err, committed, snap2)=>{
+          if(err || !committed || snap2.val()!==playerId){ return; }
+          // we successfully claimed; create room
+          roomId = "room-"+Date.now()+"-"+Math.floor(Math.random()*1000);
+          mySide = "blue";
           const roomData={
             createdAt: firebase.database.ServerValue.TIMESTAMP,
             state:"active",
             players:{
               [playerId]:{connected:true,side:"blue",name:playerName},
-              [oppId]:{connected:true,side:"red"}
+              [cand]:{connected:true,side:"red"}
             }
           };
-          db.ref("rooms/"+roomId).set(roomData);
-          db.ref("queue/"+oppId).remove();
-          startBattle();
-        }else{
-          db.ref("queue/"+playerId).set({name:playerName});
-          db.ref("rooms").on("child_added", snap=>{
-            if(!searching) return;
-            const r=snap.val();
-            if(r && r.players && r.players[playerId] && !roomId){
-              roomId=snap.key;
-              mySide=r.players[playerId].side||"red";
-              startBattle();
-            }
+          db.ref("rooms/"+roomId).set(roomData).then(()=>{
+            db.ref("queue/"+cand).remove();
+            db.ref("queue/"+playerId).remove();
+            startBattle();
           });
-        }
+        });
       });
     }
+
     function cancelSearch(){
       searching=false;
       db.ref("queue/"+playerId).remove();
+      queueAdded=false;
       document.getElementById("statusText").innerText="Idle";
       document.getElementById("battleBtn").style.display="inline-block";
       document.getElementById("cancelBtn").style.display="none";
     }
 
-    // Rejoin active room if you refreshed
+    // Rejoin an active room if you refreshed
     function tryRejoinRoom(){
       db.ref("rooms").once("value").then(s=>{
         s.forEach(r=>{
@@ -417,8 +416,10 @@
     let towers=[], units=[], selectedCard=null;
     let placementCircle=null, lastMouse={x:canvas.width/2, y:canvas.height*0.75};
     const cardCooldowns={}; // name -> timestamp
+    let projectiles=[]; // tower shots
+    let gameOver=false;
 
-    // Render owned cards into the battle hand
+    // Hand (owned cards)
     function renderHand(owned){
       const bar=document.getElementById("cardBar"); bar.innerHTML="";
       allCards.forEach(card=>{
@@ -431,7 +432,6 @@
           if((cardCooldowns[card.name]||0) > Date.now()) return;
           selectedCard=card;
           highlightSelected(d);
-          // show circle immediately at last mouse position, clamped to my half
           let y=lastMouse.y;
           if(mySide==="blue" && y<canvas.height/2) y=canvas.height/2;
           if(mySide==="red"  && y>canvas.height/2) y=canvas.height/2;
@@ -453,11 +453,9 @@
       });
     }
 
-    // Placement circle follow
     function clampToHalf(x,y){
       if(mySide==="blue" && y<canvas.height/2) y=canvas.height/2;
       if(mySide==="red"  && y>canvas.height/2) y=canvas.height/2;
-      // soft clamp inside canvas bounds
       if(x<20) x=20; if(x>canvas.width-20) x=canvas.width-20;
       if(y<20) y=20; if(y>canvas.height-20) y=canvas.height-20;
       return {x,y};
@@ -470,8 +468,9 @@
       placementCircle = clampToHalf(lastMouse.x, lastMouse.y);
     });
 
-    // Drop card -> push action; 5s cooldown
+    // Drop card (only when 2 players are connected)
     canvas.addEventListener("click", e=>{
+      if(!battleReady) return;
       if(!selectedCard) return;
       const rect=canvas.getBoundingClientRect();
       let x=e.clientX-rect.left, y=e.clientY-rect.top;
@@ -489,41 +488,50 @@
       document.querySelectorAll("#cardBar .card").forEach(c=>c.classList.remove("selected"));
     });
 
+    /* Arena draw with TWO BRIDGES and river */
     function drawArena(){
-      // background field
-      // grass gradient
+      // grass
       const g=ctx.createLinearGradient(0,0,0,canvas.height);
-      g.addColorStop(0,"#0f2b1f");
-      g.addColorStop(0.5,"#123725");
-      g.addColorStop(1,"#0f2b1f");
+      g.addColorStop(0,"#0f2b1f"); g.addColorStop(0.5,"#123725"); g.addColorStop(1,"#0f2b1f");
       ctx.fillStyle=g; ctx.fillRect(0,0,canvas.width,canvas.height);
 
-      // center river/bridge vibe
-      ctx.fillStyle="#283c59";
-      ctx.fillRect(0, canvas.height/2-10, canvas.width, 20);
-      // bridge planks
-      ctx.fillStyle="#735c3c";
-      for(let x=0;x<canvas.width;x+=40){
-        ctx.fillRect(x, canvas.height/2-12, 24, 24);
-      }
+      // river
+      const riverH=40, riverY=canvas.height/2 - riverH/2;
+      ctx.fillStyle="#243a5e";
+      ctx.fillRect(0, riverY, canvas.width, riverH);
 
-      // lane separators (top/mid/bot)
+      // two bridges
+      const bridgeW=140, bridgeH=riverH+12;
+      const bridges=[ {x:220-bridgeW/2, y:riverY-6}, {x:580-bridgeW/2, y:riverY-6} ];
+      ctx.fillStyle="#6e5537";
+      bridges.forEach(b=>{
+        ctx.fillRect(b.x, b.y, bridgeW, bridgeH);
+        // planks
+        ctx.fillStyle="#7a6040";
+        for(let i=0;i<bridgeW;i+=18){
+          ctx.fillRect(b.x+i+2, b.y, 8, bridgeH);
+        }
+        ctx.fillStyle="#6e5537";
+      });
+
+      // lane lines
       ctx.strokeStyle="rgba(255,255,255,0.15)"; ctx.lineWidth=2;
       ctx.beginPath(); ctx.moveTo(0, canvas.height/3); ctx.lineTo(canvas.width, canvas.height/3); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, canvas.height*2/3); ctx.lineTo(canvas.width, canvas.height*2/3); ctx.stroke();
 
-      // spawn halves tint
-      ctx.fillStyle="rgba(0,0,255,0.05)"; ctx.fillRect(0, canvas.height/2, canvas.width, canvas.height/2); // blue half
-      ctx.fillStyle="rgba(255,0,0,0.05)"; ctx.fillRect(0, 0, canvas.width, canvas.height/2);               // red half
+      // halves tint
+      ctx.fillStyle="rgba(0,0,255,0.05)"; ctx.fillRect(0, canvas.height/2, canvas.width, canvas.height/2);
+      ctx.fillStyle="rgba(255,0,0,0.05)"; ctx.fillRect(0, 0, canvas.width, canvas.height/2);
     }
 
     function drawTower(t){
-      if(towerImg.complete){ ctx.drawImage(towerImg, t.x-25, t.y-25, 50, 50); }
-      else{ ctx.fillStyle=t.side==="blue"?"#5ec8ff":"#ff6b6b"; ctx.fillRect(t.x-20, t.y-20, 40, 40); }
-      // HP bar (king=1000, princess=600)
+      const size = t.king ? 60 : 50;
+      if(towerImg.complete){ ctx.drawImage(towerImg, t.x-size/2, t.y-size/2, size, size); }
+      else{ ctx.fillStyle=t.side==="blue"?"#5ec8ff":"#ff6b6b"; ctx.fillRect(t.x-size/2, t.y-size/2, size, size); }
+      // HP bar
       const maxHp = t.king?1000:600;
-      ctx.fillStyle="#900"; ctx.fillRect(t.x-22, t.y-34, 44, 6);
-      ctx.fillStyle="#3f3"; ctx.fillRect(t.x-22, t.y-34, 44*(Math.max(0,t.hp)/maxHp), 6);
+      ctx.fillStyle="#900"; ctx.fillRect(t.x-28, t.y-(size/2)-10, 56, 6);
+      ctx.fillStyle="#3f3"; ctx.fillRect(t.x-28, t.y-(size/2)-10, 56*(Math.max(0,t.hp)/maxHp), 6);
     }
 
     function spawnUnit(card, side, x, y){
@@ -534,10 +542,9 @@
     }
 
     function drawUnit(u){
-      // body
       ctx.fillStyle = (u.side==="blue") ? "#8de1ff" : "#ff7f7f";
       ctx.beginPath(); ctx.arc(u.x, u.y, 14, 0, Math.PI*2); ctx.fill();
-      // simple legs animation
+      // simple leg jiggle
       const step = Math.sin(Date.now()/120)*4;
       ctx.strokeStyle=(u.side==="blue")?"#c7f1ff":"#ffd1d1"; ctx.lineWidth=3;
       ctx.beginPath(); ctx.moveTo(u.x-8, u.y+14); ctx.lineTo(u.x-8, u.y+20+step); ctx.stroke();
@@ -548,18 +555,18 @@
     }
 
     function updateUnits(){
-      // move & fight towers (simple)
       units.forEach(u=>{
         u.y += u.dir * u.speed;
         if(u.cooldown>0) u.cooldown--;
 
+        // attack towers on contact
         for(const t of towers){
-          if(t.side===u.side) continue;
+          if(t.side===u.side || t.hp<=0) continue;
           const dx=Math.abs(u.x - t.x), dy=Math.abs(u.y - t.y);
           if(dx<30 && dy<30){
             if(u.cooldown<=0){
               t.hp -= u.dmg;
-              u.cooldown = 30; // ~0.5s
+              u.cooldown = 30;
             }
           }
         }
@@ -567,17 +574,68 @@
       units = units.filter(u=>u.hp>0);
     }
 
+    /* Tower AI (auto-shoot) */
+    function updateTowersAI(){
+      towers.forEach(t=>{
+        if(t.hp<=0) return;
+        t.cd = Math.max(0, (t.cd||0)-1);
+        const range = t.range || (t.king?250:200);
+        if(t.cd>0) return;
+
+        // find nearest enemy unit in range
+        let best=null, bestD2=Infinity;
+        for(const u of units){
+          if(u.side===t.side) continue;
+          const dx=u.x - t.x, dy=u.y - t.y;
+          const d2=dx*dx+dy*dy;
+          if(d2 < range*range && d2 < bestD2){ best=u; bestD2=d2; }
+        }
+        if(best){
+          const speed=7;
+          const dx=best.x - t.x, dy=best.y - t.y;
+          const mag=Math.max(0.001, Math.hypot(dx,dy));
+          const vx=speed*dx/mag, vy=speed*dy/mag;
+          projectiles.push({x:t.x, y:t.y, vx, vy, dmg:(t.dmg|| (t.king?35:22)), side:t.side});
+          t.cd = t.cdMax || 60; // ~1s at 60fps
+        }
+      });
+    }
+
+    function updateProjectiles(){
+      const radius=5;
+      projectiles.forEach(p=>{
+        p.x += p.vx; p.y += p.vy;
+        // hit unit?
+        for(const u of units){
+          if(u.side===p.side) continue;
+          const dx=u.x-p.x, dy=u.y-p.y;
+          if(dx*dx+dy*dy <= (radius+12)*(radius+12)){
+            u.hp -= p.dmg;
+            p.dead=true;
+            break;
+          }
+        }
+        // out of bounds
+        if(p.x<-20||p.x>canvas.width+20||p.y<-20||p.y>canvas.height+20) p.dead=true;
+      });
+      projectiles = projectiles.filter(p=>!p.dead);
+    }
+    function drawProjectiles(){
+      ctx.fillStyle="#ffd86b";
+      projectiles.forEach(p=>{
+        ctx.beginPath(); ctx.arc(p.x,p.y,5,0,Math.PI*2); ctx.fill();
+      });
+    }
+
     function endGame(winnerColor){
       if(gameOver) return; gameOver=true;
       db.ref("rooms/"+roomId+"/state").set("ended");
       db.ref("rooms/"+roomId+"/winner").set(winnerColor);
-
       const iWon = (winnerColor==="Blue" && mySide==="blue") || (winnerColor==="Red" && mySide==="red");
       if(iWon){
         playerRef.child("coins").transaction(c=>(c||0)+100);
         playerRef.child("trophies").transaction(t=>(t||0)+5);
       }
-
       document.getElementById("resultText").innerText = iWon ? "🏆 Victory!" : "❌ Defeat";
       document.getElementById("rewardText").innerText = iWon ? "+100 Coins, +5 Trophies" : "Better luck next time!";
       document.getElementById("resultScreen").style.display="block";
@@ -598,12 +656,12 @@
       leaveRoomAndMaybeDelete();
     });
 
-    let gameOver=false;
+    /* Main battle loop */
     function drawLoop(){
-      // arena background
+      // arena
       drawArena();
 
-      // towers
+      // towers (draw + check king death)
       towers.forEach(t=>{
         drawTower(t);
         if(!gameOver && t.hp<=0 && t.king){
@@ -612,14 +670,16 @@
         }
       });
 
-      // units
+      // AI + units + projectiles
+      updateTowersAI();
       updateUnits();
+      updateProjectiles();
+      drawProjectiles();
       units.forEach(drawUnit);
 
       // placement circle
       if(placementCircle && selectedCard){
-        ctx.beginPath();
-        ctx.arc(placementCircle.x, placementCircle.y, 24, 0, Math.PI*2);
+        ctx.beginPath(); ctx.arc(placementCircle.x, placementCircle.y, 24, 0, Math.PI*2);
         ctx.strokeStyle="#fff"; ctx.lineWidth=2; ctx.stroke();
       }
 
@@ -634,32 +694,42 @@
       document.getElementById("battleScreen").style.display="block";
       document.getElementById("cardBar").style.display="flex";
       document.getElementById("elixirBar").style.display="flex";
-      document.getElementById("statusText").innerText="In Battle";
+      document.getElementById("statusText").innerText="In Battle (waiting for opponent…)";
 
       // init elixir & bar
       elixir=5; lastElixirTime=Date.now(); initElixirBar();
 
-      // towers setup (vertical)
+      // towers (two princess + one big king per side)
       towers=[
-        {x:150,y:550,hp:600,side:"blue",king:false},
-        {x:650,y:550,hp:600,side:"blue",king:false},
-        {x:400,y:620,hp:1000,side:"blue",king:true},
-        {x:150,y:150,hp:600,side:"red",king:false},
-        {x:650,y:150,hp:600,side:"red",king:false},
-        {x:400,y:80,hp:1000,side:"red",king:true}
+        // Blue side (bottom)
+        {x:200,y:560,hp:600,side:"blue",king:false, range:200, dmg:22, cdMax:60},
+        {x:600,y:560,hp:600,side:"blue",king:false, range:200, dmg:22, cdMax:60},
+        {x:400,y:640,hp:1000,side:"blue",king:true,  range:250, dmg:35, cdMax:60},
+        // Red side (top)
+        {x:200,y:140,hp:600,side:"red",king:false, range:200, dmg:22, cdMax:60},
+        {x:600,y:140,hp:600,side:"red",king:false, range:200, dmg:22, cdMax:60},
+        {x:400,y:60, hp:1000,side:"red",king:true,  range:250, dmg:35, cdMax:60}
       ];
-      units=[]; gameOver=false; selectedCard=null; placementCircle=null;
+      units=[]; projectiles=[]; gameOver=false; selectedCard=null; placementCircle=null; battleReady=false;
 
-      // mark presence in room
+      // presence in room
       db.ref("rooms/"+roomId+"/players/"+playerId).update({connected:true, side:mySide, name:playerName});
       db.ref("rooms/"+roomId+"/players/"+playerId).onDisconnect().update({connected:false, lastSeen: firebase.database.ServerValue.TIMESTAMP});
+
+      // wait for both players
+      roomPlayersRef = db.ref("rooms/"+roomId+"/players");
+      roomPlayersRef.on("value", s=>{
+        let connected=0; s.forEach(p=>{ if(p.val() && p.val().connected) connected++; });
+        battleReady = (connected>=2);
+        document.getElementById("statusText").innerText = battleReady ? "In Battle" : "In Battle (waiting for opponent…)";
+      });
 
       // load owned & render hand
       playerRef.child("ownedCards").once("value").then(s=>{
         renderHand(s.val()||{});
       });
 
-      // actions listener
+      // actions listener (sync spawns)
       if(actionsRef) actionsRef.off();
       actionsRef = db.ref("rooms/"+roomId+"/actions");
       actionsRef.on("child_added", snap=>{
@@ -685,11 +755,9 @@
       leaveRoomAndMaybeDelete();
 
       placementCircle=null; selectedCard=null; gameOver=false;
-      roomId=null; mySide=null; searching=false;
+      roomId=null; mySide=null; searching=false; battleReady=false;
+      queueAdded=false;
     }
-
-    /************ Menu Buttons ************/
-    // Exposed handlers are already wired on buttons; all logic stays here.
   </script>
 </body>
 </html>
