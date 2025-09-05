@@ -197,7 +197,7 @@
 
     const playerRef = db.ref("players/"+playerId);
 
-    // Initialize if missing; start with 400 coins (legacy users without coins also set to 400 once)
+    // Initialize if missing; start with 400 coins
     playerRef.once("value").then(snap=>{
       if(!snap.exists()){
         playerRef.set({
@@ -231,28 +231,28 @@
 
     /************ Cards (24 total) ************/
     const allCards = [
-      {name:"Knight",hp:200,maxHp:200,dmg:20,range:20,cost:3,speed:2,img:"https://img.icons8.com/color/96/knight.png", price:0},
+      {name:"Knight",hp:200,maxHp:200,dmg:20,range:25,cost:3,speed:2,img:"https://img.icons8.com/color/96/knight.png", price:0},
       {name:"Archer",hp:120,maxHp:120,dmg:15,range:120,cost:3,speed:2,img:"https://img.icons8.com/color/96/bow.png", price:0},
-      {name:"Golem",hp:400,maxHp:400,dmg:30,range:20,cost:6,speed:1,img:"https://img.icons8.com/color/96/rock.png", price:0},
+      {name:"Golem",hp:400,maxHp:400,dmg:30,range:25,cost:6,speed:1,img:"https://img.icons8.com/color/96/rock.png", price:0},
       {name:"Dragon",hp:150,maxHp:150,dmg:40,range:100,cost:5,speed:3,img:"https://img.icons8.com/color/96/dragon.png", price:0},
 
       {name:"Wizard",hp:160,maxHp:160,dmg:35,range:150,cost:5,speed:2,img:"https://img.icons8.com/color/96/wizard.png", price:500},
-      {name:"Goblin",hp:90,maxHp:90,dmg:12,range:15,cost:2,speed:4,img:"https://img.icons8.com/color/96/goblin.png", price:200},
-      {name:"Barbarian",hp:220,maxHp:220,dmg:25,range:20,cost:4,speed:2,img:"https://img.icons8.com/color/96/barbarian.png", price:400},
-      {name:"Ice Spirit",hp:80,maxHp:80,dmg:10,range:10,cost:1,speed:5,img:"https://img.icons8.com/color/96/snowflake.png", price:150},
+      {name:"Goblin",hp:90,maxHp:90,dmg:12,range:25,cost:2,speed:4,img:"https://img.icons8.com/color/96/goblin.png", price:200},
+      {name:"Barbarian",hp:220,maxHp:220,dmg:25,range:25,cost:4,speed:2,img:"https://img.icons8.com/color/96/barbarian.png", price:400},
+      {name:"Ice Spirit",hp:80,maxHp:80,dmg:10,range:20,cost:1,speed:5,img:"https://img.icons8.com/color/96/snowflake.png", price:150},
       {name:"Giant",hp:600,maxHp:600,dmg:45,range:25,cost:7,speed:1,img:"https://img.icons8.com/color/96/giant.png", price:700},
       {name:"Musketeer",hp:140,maxHp:140,dmg:30,range:200,cost:4,speed:2,img:"https://img.icons8.com/color/96/musket.png", price:450},
-      {name:"Prince",hp:280,maxHp:280,dmg:50,range:20,cost:5,speed:3,img:"https://img.icons8.com/color/96/prince.png", price:600},
+      {name:"Prince",hp:280,maxHp:280,dmg:50,range:25,cost:5,speed:3,img:"https://img.icons8.com/color/96/prince.png", price:600},
       {name:"Dark Knight",hp:260,maxHp:260,dmg:35,range:30,cost:5,speed:3,img:"https://img.icons8.com/color/96/darth-vader.png", price:600},
-      {name:"Healer",hp:150,maxHp:150,dmg:0,range:150,cost:4,speed:2,img:"https://img.icons8.com/color/96/angel.png", price:400},
-      {name:"Bomber",hp:110,maxHp:110,dmg:45,range:25,cost:3,speed:2,img:"https://img.icons8.com/color/96/bomb.png", price:300},
-      {name:"Skeleton Army",hp:50,maxHp:50,dmg:10,range:10,cost:3,speed:4,img:"https://img.icons8.com/color/96/skeleton.png", price:250},
+      {name:"Healer",hp:150,maxHp:150,dmg:0,range:60,cost:4,speed:2,img:"https://img.icons8.com/color/96/angel.png", price:400},
+      {name:"Bomber",hp:110,maxHp:110,dmg:45,range:60,cost:3,speed:2,img:"https://img.icons8.com/color/96/bomb.png", price:300},
+      {name:"Skeleton Army",hp:50,maxHp:50,dmg:10,range:20,cost:3,speed:4,img:"https://img.icons8.com/color/96/skeleton.png", price:250},
       {name:"Valkyrie",hp:260,maxHp:260,dmg:40,range:25,cost:4,speed:2,img:"https://img.icons8.com/color/96/valkyrie.png", price:450},
-      {name:"Hog Rider",hp:280,maxHp:280,dmg:55,range:20,cost:4,speed:4,img:"https://img.icons8.com/color/96/boar.png", price:500},
+      {name:"Hog Rider",hp:280,maxHp:280,dmg:55,range:25,cost:4,speed:4,img:"https://img.icons8.com/color/96/boar.png", price:500},
       {name:"Electro Spirit",hp:100,maxHp:100,dmg:20,range:60,cost:2,speed:4,img:"https://img.icons8.com/color/96/lightning-bolt.png", price:250},
       {name:"Baby Dragon",hp:180,maxHp:180,dmg:35,range:80,cost:4,speed:3,img:"https://img.icons8.com/color/96/baby-dragon.png", price:500},
       {name:"Pekka",hp:700,maxHp:700,dmg:80,range:25,cost:8,speed:1,img:"https://img.icons8.com/color/96/robot.png", price:800},
-      {name:"Bandit",hp:200,maxHp:200,dmg:40,range:20,cost:4,speed:5,img:"https://img.icons8.com/color/96/ninja.png", price:500},
+      {name:"Bandit",hp:200,maxHp:200,dmg:40,range:25,cost:4,speed:5,img:"https://img.icons8.com/color/96/ninja.png", price:500},
       {name:"Witch",hp:160,maxHp:160,dmg:25,range:180,cost:5,speed:2,img:"https://img.icons8.com/color/96/witch.png", price:500},
       {name:"Bowler",hp:300,maxHp:300,dmg:35,range:150,cost:6,speed:2,img:"https://img.icons8.com/color/96/bowling-ball.png", price:600},
       {name:"Hunter",hp:200,maxHp:200,dmg:50,range:100,cost:4,speed:3,img:"https://img.icons8.com/color/96/shotgun.png", price:500},
@@ -343,7 +343,6 @@
       if(pairInterval) clearInterval(pairInterval);
       pairInterval = setInterval(()=>{ if(searching && !roomId) attemptPair(); }, 1500);
 
-      // If someone else pairs us into a room
       db.ref("rooms").on("child_added", snap=>{
         if(!searching || roomId) return;
         const r=snap.val();
@@ -380,7 +379,7 @@
           const roomData={
             createdAt: firebase.database.ServerValue.TIMESTAMP,
             state:"active",
-            host: playerId, // I am host (authoritative)
+            host: playerId,
             players:{
               [playerId]:{connected:true,side:"blue",name:playerName},
               [cand]:{connected:true,side:"red",name:oppName}
@@ -405,7 +404,6 @@
       document.getElementById("cancelBtn").style.display="none";
     }
 
-    // Rejoin if refreshed
     function tryRejoinRoom(){
       db.ref("rooms").once("value").then(s=>{
         s.forEach(r=>{
@@ -439,9 +437,10 @@
     const cardCooldowns={}; // name -> timestamp
     let projectiles=[]; // tower shots
     let gameOver=false;
-    let nameBlue="Blue", nameRed="Red"; // from room
-    let pendingActionKeys=new Set(); // host: dedupe actions
-    let publishTimer=0, PUBLISH_MS=100; // host publishes ~10fps
+    let nameBlue="Blue", nameRed="Red";
+    let pendingActionKeys=new Set();
+    let lastPublishTime=0, PUBLISH_MS=100;
+    let roomCleanupArmed=true;
 
     // Hand (owned cards)
     function renderHand(owned){
@@ -455,7 +454,8 @@
         d.onclick=()=>{
           if((cardCooldowns[card.name]||0) > Date.now()) return;
           selectedCard=card;
-          highlightSelected(d);
+          document.querySelectorAll("#cardBar .card").forEach(c=>c.classList.remove("selected"));
+          d.classList.add("selected");
           let y=lastMouse.y;
           if(mySide==="blue" && y<canvas.height/2) y=canvas.height/2;
           if(mySide==="red"  && y>canvas.height/2) y=canvas.height/2;
@@ -463,10 +463,6 @@
         };
         bar.appendChild(d);
       });
-    }
-    function highlightSelected(el){
-      document.querySelectorAll("#cardBar .card").forEach(c=>c.classList.remove("selected"));
-      el.classList.add("selected");
     }
     function refreshCooldownStyles(){
       const now=Date.now();
@@ -492,7 +488,7 @@
       placementCircle = clampToHalf(lastMouse.x, lastMouse.y);
     });
 
-    // Drop card → push action (host will process)
+    // Drop card → push action
     canvas.addEventListener("click", e=>{
       if(!battleReady) return;
       if(!selectedCard) return;
@@ -515,16 +511,13 @@
 
     /* Drawing helpers */
     function drawArena(){
-      // grass
       const g=ctx.createLinearGradient(0,0,0,canvas.height);
       g.addColorStop(0,"#0f2b1f"); g.addColorStop(0.5,"#123725"); g.addColorStop(1,"#0f2b1f");
       ctx.fillStyle=g; ctx.fillRect(0,0,canvas.width,canvas.height);
 
-      // river
       ctx.fillStyle="#243a5e";
       ctx.fillRect(0, RIVER_Y, canvas.width, RIVER_H);
 
-      // two bridges
       const bridges=[ {x:BRIDGE_CENTERS[0]-BRIDGE_W/2, y:RIVER_Y-6}, {x:BRIDGE_CENTERS[1]-BRIDGE_W/2, y:RIVER_Y-6} ];
       ctx.fillStyle="#6e5537";
       bridges.forEach(b=>{
@@ -534,12 +527,10 @@
         ctx.fillStyle="#6e5537";
       });
 
-      // lanes
       ctx.strokeStyle="rgba(255,255,255,0.15)"; ctx.lineWidth=2;
       ctx.beginPath(); ctx.moveTo(0, canvas.height/3); ctx.lineTo(canvas.width, canvas.height/3); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, canvas.height*2/3); ctx.lineTo(canvas.width, canvas.height*2/3); ctx.stroke();
 
-      // halves tint
       ctx.fillStyle="rgba(0,0,255,0.05)"; ctx.fillRect(0, canvas.height/2, canvas.width, canvas.height/2);
       ctx.fillStyle="rgba(255,0,0,0.05)"; ctx.fillRect(0, 0, canvas.width, canvas.height/2);
     }
@@ -579,6 +570,17 @@
       return (Math.abs(x-a) <= Math.abs(x-b)) ? a : b;
     }
 
+    function nearestEnemyTower(u){
+      let best=null, bestD2=Infinity;
+      for(const t of towers){
+        if(t.side===u.side || t.hp<=0) continue;
+        const dx=t.x - u.x, dy=t.y - u.y;
+        const d2 = dx*dx + dy*dy;
+        if(d2 < bestD2){ best=t; bestD2=d2; }
+      }
+      return best;
+    }
+
     function spawnUnit(card, side, x, y){
       const slowFactor = 0.30; // slower
       const speed = Math.max(0.35, card.speed * slowFactor);
@@ -587,7 +589,8 @@
       units.push({
         name:card.name, hp:card.hp, maxHp:card.maxHp, dmg:card.dmg, range:card.range,
         speed, side, x, y, cooldown:0, dir:(side==="blue" ? -1 : 1),
-        pathStage:'toBridge', targetX: bridgeX, targetY: startTargetY
+        pathStage:'toBridge', targetX: bridgeX, targetY: startTargetY,
+        goal: null // will be set after crossing
       });
     }
 
@@ -602,36 +605,54 @@
 
     function updateUnits(){
       units.forEach(u=>{
+        // Pathing to cross bridges first
         if(u.pathStage==='toBridge'){
           if(moveTowards(u, u.targetX, u.targetY)){
             u.pathStage='crossing';
             u.targetY = (u.side==='blue') ? (RIVER_Y - 8) : (RIVER_Y + RIVER_H + 8);
           }
-        } else if(u.pathStage==='crossing'){
+          return;
+        }
+        if(u.pathStage==='crossing'){
           if(moveTowards(u, u.targetX, u.targetY)){
             u.pathStage='toTarget';
           }
+          return;
+        }
+
+        // After crossing: acquire/maintain nearest enemy tower as goal
+        if(!u.goal || u.goal.hp<=0){
+          u.goal = nearestEnemyTower(u);
+        }
+        if(!u.goal){
+          // no towers left (host's win check happens elsewhere)
+          return;
+        }
+
+        // Distance to target tower
+        const dx=u.goal.x - u.x, dy=u.goal.y - u.y;
+        const dist = Math.hypot(dx,dy);
+        const attackRange = Math.max(20, u.range||25);
+
+        if(dist <= attackRange){
+          // ATTACK: stop moving while attacking
+          if(u.cooldown<=0){
+            u.goal.hp -= u.dmg;
+            u.cooldown = 30; // ~0.5s
+          }
         } else {
-          u.y += u.dir * u.speed;
+          // MOVE toward tower
+          moveTowards(u, u.goal.x, u.goal.y);
         }
 
         if(u.cooldown>0) u.cooldown--;
-
-        // Towers contact damage
-        for(const t of towers){
-          if(t.side===u.side || t.hp<=0) continue;
-          const dx=Math.abs(u.x - t.x), dy=Math.abs(u.y - t.y);
-          if(dx<30 && dy<30){
-            if(u.cooldown<=0){
-              t.hp -= u.dmg;
-              u.cooldown = 30;
-            }
-          }
-        }
       });
+
+      // cull dead units
       units = units.filter(u=>u.hp>0);
     }
 
+    /* Tower AI */
     function updateTowersAI(){
       towers.forEach(t=>{
         if(t.hp<=0) return;
@@ -689,7 +710,7 @@
     }
 
     function leaveRoomAndMaybeDelete(){
-      if(!roomId) return;
+      if(!roomRef || !roomId || !roomCleanupArmed) return;
       const myPlayerNode = roomRef.child("players/"+playerId);
       myPlayerNode.update({connected:false, lastSeen: firebase.database.ServerValue.TIMESTAMP});
       roomRef.child("players").once("value").then(s=>{
@@ -705,7 +726,6 @@
 
     /* Host/non-host wiring */
     function attachHostListeners(){
-      // Host processes actions (spawns)
       actionsRef.on("child_added", snap=>{
         const key=snap.key;
         if(pendingActionKeys.has(key)) return;
@@ -716,11 +736,9 @@
       });
     }
     function attachClientStateListener(){
-      // Non-host: listen to authoritative state
       stateRef.on("value", snap=>{
         const st=snap.val();
         if(!st) return;
-        // deep copy to our local draw state
         towers = (st.towers||[]).map(t=>({...t}));
         units  = (st.units ||[]).map(u=>({...u}));
       });
@@ -743,28 +761,22 @@
       nameRed  = rNameSnap.val() || "Red";
     }
 
-    /* Main draw loop (both sides draw; only host simulates + publishes) */
-    let lastPublishTime=0;
+    /* Main draw loop */
     function drawLoop(ts){
-      // arena
       drawArena();
 
-      // draw towers
       towers.forEach(t=> drawTower(t));
-
-      // names by king towers
       const kBlue = towers.find(t=>t.side==="blue" && t.king);
       const kRed  = towers.find(t=>t.side==="red"  && t.king);
       if(kBlue) drawTowerName(kBlue, nameBlue);
       if(kRed)  drawTowerName(kRed,  nameRed);
 
-      // host sim step
       if(isHost && !gameOver){
         updateTowersAI();
         updateUnits();
         updateProjectiles();
 
-        // winner check (host only)
+        // win check (king down)
         for(const t of towers){
           if(t.hp<=0 && t.king){
             const winner = (t.side==="blue") ? "Red" : "Blue";
@@ -783,11 +795,10 @@
         }
       }
 
-      // draw units + projectiles
+      // draw projectiles + units
       projectiles.forEach(p=>{ ctx.fillStyle="#ffd86b"; ctx.beginPath(); ctx.arc(p.x,p.y,5,0,Math.PI*2); ctx.fill(); });
       units.forEach(drawUnit);
 
-      // placement ring
       if(placementCircle && selectedCard){
         ctx.beginPath(); ctx.arc(placementCircle.x, placementCircle.y, 24, 0, Math.PI*2);
         ctx.strokeStyle="#fff"; ctx.lineWidth=2; ctx.stroke();
@@ -807,47 +818,54 @@
       document.getElementById("elixirBar").style.display="flex";
       document.getElementById("statusText").innerText="In Battle (waiting for opponent…)";
 
-      // state refs
+      // refs
       roomRef = db.ref("rooms/"+roomId);
       actionsRef = roomRef.child("actions");
       stateRef   = roomRef.child("authoritativeState");
       roomPlayersRef = roomRef.child("players");
 
-      // host id & role
+      // role
       roomRef.child("host").on("value", snap=>{
         hostId = snap.val();
         isHost = (hostId === playerId);
+        // switch listeners accordingly
+        if(isHost){
+          if(stateRef) stateRef.off();
+          attachHostListeners();
+        }else{
+          if(actionsRef) actionsRef.off();
+          attachClientStateListener();
+        }
       });
 
-      // ensure we’re connected in room
+      // ensure presence in room
       roomRef.child("players/"+playerId).update({connected:true, side:mySide, name:playerName});
       roomRef.child("players/"+playerId).onDisconnect().update({connected:false, lastSeen: firebase.database.ServerValue.TIMESTAMP});
 
-      // detect both players connected
+      // both connected?
       roomPlayersRef.on("value", s=>{
-        let connected=0, hostConnected=false, otherId=null;
+        let connected=0, hostConnected=false;
         s.forEach(p=>{
           const v=p.val(); if(!v) return;
           if(v.connected) connected++;
           if(p.key===hostId) hostConnected=!!v.connected;
-          if(p.key!==playerId) otherId=p.key;
         });
         battleReady = (connected>=2);
         document.getElementById("statusText").innerText = battleReady ? "In Battle" : "In Battle (waiting for opponent…)";
 
-        // Host migration: if host missing and I'm connected, try to become host
+        // host migration
         if(!hostConnected && battleReady && hostId!==playerId){
           roomRef.child("host").transaction(v => v || playerId);
         }
       });
 
-      // load names
+      // names
       loadRoomNames();
 
-      // init elixir & bar
+      // elixir
       elixir=5; lastElixirTime=Date.now(); initElixirBar();
 
-      // set up towers initial (same for both)
+      // towers initial
       towers=[
         // Blue
         {x:200,y:560,hp:600,side:"blue",king:false, range:200, dmg:22, cdMax:60},
@@ -861,14 +879,10 @@
       units=[]; projectiles=[]; gameOver=false; selectedCard=null; placementCircle=null; battleReady=false;
       pendingActionKeys.clear();
 
-      // owned → hand
+      // hand
       playerRef.child("ownedCards").once("value").then(s=>{ renderHand(s.val()||{}); });
 
-      // host/client listeners
-      if(isHost){ attachHostListeners(); }
-      else     { attachClientStateListener(); }
-
-      // winner listener (non-host will also get this to show banner)
+      // winner listener (for non-host as well)
       roomRef.child("winner").on("value", snap=>{
         const w=snap.val(); if(!w || gameOver) return;
         const iWon = (w==="Blue" && mySide==="blue") || (w==="Red" && mySide==="red");
@@ -893,7 +907,6 @@
       if(stateRef)   stateRef.off();
       if(roomPlayersRef) roomPlayersRef.off();
       if(roomRef) roomRef.child("host").off();
-      roomRef=null; actionsRef=null; stateRef=null; roomPlayersRef=null;
 
       leaveRoomAndMaybeDelete();
 
