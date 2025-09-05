@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Flash Royale</title>
   <style>
     body {
@@ -12,87 +12,69 @@
       color: white;
       user-select: none;
       overflow: hidden;
-      /* Use the castle background already in the repo */
       background: url('dark-castle.png') no-repeat center center fixed;
       background-size: cover;
     }
-    .top-bar{display:flex;justify-content:space-between;align-items:center;padding:10px 20px;background:rgba(10,15,30,0.7);border-bottom:3px solid #1e3d59;font-size:14px;}
+
+    .top-bar {
+      display:flex;justify-content:space-between;align-items:center;
+      padding:10px 20px;background:rgba(10,15,30,0.7);
+      border-bottom:3px solid #1e3d59;font-size:14px;
+    }
     .currency{display:flex;gap:15px;}
     .currency div{background:#2d3e50;padding:5px 12px;border-radius:8px;display:flex;align-items:center;gap:5px;}
     #onlineCount { margin-left: 15px; font-weight: bold; }
+
     .screen{display:none;height:100vh;}
-    #menuScreen { display: block; text-align: center; }
-    #battleScreen { text-align: center; display:none; position:relative; }
+    #menuScreen { display:block; text-align:center; overflow:auto; padding-bottom:120px; }
+    #battleScreen { text-align:center; display:none; position:relative; }
+
     .battle-btn{background:#ffcc00;padding:20px 60px;border-radius:20px;font-size:32px;color:black;cursor:pointer;margin-top:20px;border:3px solid #fff;box-shadow:0 0 25px rgba(255,255,0,0.9);}
     .cancel-btn{background:#ff4444;padding:15px 40px;border-radius:15px;font-size:24px;color:white;cursor:pointer;margin-top:20px;border:3px solid #fff;box-shadow:0 0 20px rgba(255,0,0,0.7);display:none;}
-    .deck{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px auto;max-width:400px;}
-    .card{position:relative;border-radius:12px;overflow:hidden;text-align:center;font-size:12px;cursor:pointer;background:linear-gradient(to bottom,#333,#111);border:3px solid #888;box-shadow:0 3px 8px rgba(0,0,0,0.6);padding:5px;}
+
+    .deck,.shop{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px auto;max-width:520px;}
+    .card{position:relative;border-radius:12px;overflow:hidden;text-align:center;font-size:12px;cursor:pointer;background:linear-gradient(to bottom,#333,#111);border:3px solid #888;box-shadow:0 3px 8px rgba(0,0,0,0.6);padding:8px;}
     .card img{width:70%;margin:5px auto;}
     .card.selected{border:3px solid cyan;box-shadow:0 0 15px cyan;}
     .elixir-cost{position:absolute;top:5px;left:5px;background:#9c27b0;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold;border:2px solid white;}
+    .price-tag{position:absolute;bottom:5px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);padding:2px 6px;border-radius:6px;font-size:12px;}
+
+    .shop .buy-btn{margin-top:6px;padding:6px 10px;border-radius:8px;border:2px solid #fff;background:#28a745;color:#fff;cursor:pointer;}
+    .shop .owned{margin-top:6px;padding:6px 10px;border-radius:8px;border:2px solid #888;background:#444;color:#aaa;}
+
     #arenaBackground {
-      display: none;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
-      z-index: 0;
+      display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      max-width:100%; max-height:100%; object-fit:contain; z-index:0;
     }
     #battleCanvas {
-      position: relative;
-      background: transparent;
-      border: 3px solid white;
-      margin-top: 20px;
-      display: block;
-      margin-left: auto;
-      margin-right: auto;
-      z-index: 1;
+      position:relative; background:transparent; border:3px solid white;
+      margin-top:20px; display:block; margin-left:auto; margin-right:auto; z-index:1;
     }
-    #cardBar{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);display:flex;gap:10px;display:none;}
+    #cardBar{
+      position:fixed; bottom:100px; left:50%; transform:translateX(-50%);
+      display:none; gap:10px; z-index:5;
+    }
     #elixirBar {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 500px;
-      height: 24px;
-      border: 2px solid white;
-      border-radius: 10px;
-      background: #222;
-      display: none;
-      justify-content: space-between;
-      padding: 2px;
+      position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+      width:500px; height:24px; border:2px solid white; border-radius:10px; background:#222;
+      display:none; justify-content:space-between; padding:2px; z-index:5;
     }
-    .elixir-segment { flex: 1; margin: 0 1px; background: #444; border-radius: 4px; }
-    .elixir-filled { background: purple; }
+    .elixir-segment { flex:1; margin:0 1px; background:#444; border-radius:4px; }
+    .elixir-filled { background:purple; }
+    .cooldown { opacity:0.45; pointer-events:none; filter:grayscale(0.5); }
 
-    /* Victory/Defeat banner */
+    /* Victory/Defeat */
     #resultScreen {
-      display: none;
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: rgba(0,0,0,0.8);
-      color: white;
-      text-align: center;
-      font-size: 32px;
-      padding-top: 200px;
-      z-index: 10;
+      display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+      background:rgba(0,0,0,0.8); color:white; text-align:center; font-size:32px;
+      padding-top:200px; z-index:10;
     }
     #resultScreen button {
-      margin-top: 30px;
-      padding: 15px 40px;
-      font-size: 20px;
-      border: none;
-      border-radius: 12px;
-      cursor: pointer;
-      background: gold;
-      color: black;
+      margin-top:30px; padding:15px 40px; font-size:20px; border:none;
+      border-radius:12px; cursor:pointer; background:gold; color:black;
     }
   </style>
+  <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
 </head>
@@ -113,9 +95,15 @@
     <h2>🏆 Flash Royale</h2>
     <p>Name: <b id="playerNameLabel"></b></p>
     <p>Your trophies: <b id="trophies">0</b></p>
+
     <button id="battleBtn" class="battle-btn" onclick="findMatch()">BATTLE</button>
     <button id="cancelBtn" class="cancel-btn" onclick="cancelSearch()">Cancel</button>
-    <h2>Your Deck</h2><div class="deck" id="deck"></div>
+
+    <h2>Your Deck</h2>
+    <div class="deck" id="deck"></div>
+
+    <h2>Shop</h2>
+    <div class="shop" id="shop"></div>
   </div>
 
   <!-- Battle -->
@@ -123,6 +111,8 @@
     <img id="arenaBackground" src="arena-bg.png" width="800" height="700"/>
     <canvas id="battleCanvas" width="800" height="700"></canvas>
   </div>
+
+  <!-- Bottom UI (Battle only) -->
   <div id="cardBar"></div>
   <div id="elixirBar"></div>
 
@@ -134,36 +124,528 @@
   </div>
 
   <script>
-    // Simple demo logic for switching screens
+    /************ Firebase Init ************/
+    const firebaseConfig = {
+      apiKey: "AIzaSyA3FUH9RZiQ9IRChNpGqNrgjt2r5AA5RF8",
+      authDomain: "flash-royale-a92c0.firebaseapp.com",
+      databaseURL: "https://flash-royale-a92c0-default-rtdb.firebaseio.com",
+      projectId: "flash-royale-a92c0",
+      storageBucket: "flash-royale-a92c0.appspot.com",
+      messagingSenderId: "703977930640",
+      appId: "1:703977930640:web:a4f70deb5bbe508aec7d15",
+      measurementId: "G-61B7P6WEL0"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    /************ Assets ************/
+    const towerImg = new Image();
+    towerImg.src = "mini-castle.png";
+
+    /************ Player + Presence ************/
+    const sanitizeName = s => (s||"").replace(/[^a-zA-Z0-9]/g,"").substring(0,6) || "Anon";
+
+    let playerId = localStorage.getItem("playerId");
+    if(!playerId){ playerId = "player-"+Math.floor(Math.random()*10000); localStorage.setItem("playerId", playerId); }
+
+    let playerName = localStorage.getItem("playerName");
+    if(!playerName){
+      playerName = sanitizeName(prompt("Enter your player name (max 6 chars):",""));
+      localStorage.setItem("playerName", playerName);
+    }
+    document.getElementById("playerNameLabel").innerText = playerName;
+
+    const playerRef = db.ref("players/"+playerId);
+
+    // Initialize player if missing; do NOT overwrite coins/trophies if already exist.
+    playerRef.once("value").then(snap=>{
+      if(!snap.exists()){
+        playerRef.set({
+          name: playerName,
+          online: true,
+          disconnected: false,
+          coins: 0,
+          trophies: 0,
+          ownedCards: { "Knight": true, "Archer": true, "Golem": true, "Dragon": true }
+        });
+      } else {
+        playerRef.update({ name: playerName, online: true, disconnected: false });
+      }
+    });
+
+    // Keep HUD in sync with Firebase values
+    playerRef.on("value", snap=>{
+      const p = snap.val() || {};
+      document.getElementById("coinCount").innerText = p.coins || 0;
+      document.getElementById("trophies").innerText = p.trophies || 0;
+    });
+
+    // Online count
+    db.ref("players").on("value", snap=>{
+      let online = 0;
+      snap.forEach(c=>{ if(c.val() && c.val().online) online++; });
+      document.getElementById("onlineCount").innerText = "Online: " + online;
+    });
+
+    // Presence
+    playerRef.onDisconnect().update({ online:false, disconnected:true });
+
+    /************ Characters (24 total) + prices ************/
+    const allCards = [
+      {name:"Knight",hp:200,maxHp:200,dmg:20,range:20,cost:3,speed:2,img:"https://img.icons8.com/color/96/knight.png",   price:0},
+      {name:"Archer",hp:120,maxHp:120,dmg:15,range:120,cost:3,speed:2,img:"https://img.icons8.com/color/96/bow.png",      price:0},
+      {name:"Golem",hp:400,maxHp:400,dmg:30,range:20,cost:6,speed:1,img:"https://img.icons8.com/color/96/rock.png",        price:0},
+      {name:"Dragon",hp:150,maxHp:150,dmg:40,range:100,cost:5,speed:3,img:"https://img.icons8.com/color/96/dragon.png",    price:0},
+
+      {name:"Wizard",hp:160,maxHp:160,dmg:35,range:150,cost:5,speed:2,img:"https://img.icons8.com/color/96/wizard.png",    price:500},
+      {name:"Goblin",hp:90,maxHp:90,dmg:12,range:15,cost:2,speed:4,img:"https://img.icons8.com/color/96/goblin.png",       price:200},
+      {name:"Barbarian",hp:220,maxHp:220,dmg:25,range:20,cost:4,speed:2,img:"https://img.icons8.com/color/96/barbarian.png",price:400},
+      {name:"Ice Spirit",hp:80,maxHp:80,dmg:10,range:10,cost:1,speed:5,img:"https://img.icons8.com/color/96/snowflake.png", price:150},
+      {name:"Giant",hp:600,maxHp:600,dmg:45,range:25,cost:7,speed:1,img:"https://img.icons8.com/color/96/giant.png",       price:700},
+      {name:"Musketeer",hp:140,maxHp:140,dmg:30,range:200,cost:4,speed:2,img:"https://img.icons8.com/color/96/musket.png", price:450},
+      {name:"Prince",hp:280,maxHp:280,dmg:50,range:20,cost:5,speed:3,img:"https://img.icons8.com/color/96/prince.png",     price:600},
+      {name:"Dark Knight",hp:260,maxHp:260,dmg:35,range:30,cost:5,speed:3,img:"https://img.icons8.com/color/96/darth-vader.png", price:600},
+      {name:"Healer",hp:150,maxHp:150,dmg:0,range:150,cost:4,speed:2,img:"https://img.icons8.com/color/96/angel.png",      price:400},
+      {name:"Bomber",hp:110,maxHp:110,dmg:45,range:25,cost:3,speed:2,img:"https://img.icons8.com/color/96/bomb.png",       price:300},
+      {name:"Skeleton Army",hp:50,maxHp:50,dmg:10,range:10,cost:3,speed:4,img:"https://img.icons8.com/color/96/skeleton.png", price:250},
+      {name:"Valkyrie",hp:260,maxHp:260,dmg:40,range:25,cost:4,speed:2,img:"https://img.icons8.com/color/96/valkyrie.png", price:450},
+      {name:"Hog Rider",hp:280,maxHp:280,dmg:55,range:20,cost:4,speed:4,img:"https://img.icons8.com/color/96/boar.png",    price:500},
+      {name:"Electro Spirit",hp:100,maxHp:100,dmg:20,range:60,cost:2,speed:4,img:"https://img.icons8.com/color/96/lightning-bolt.png", price:250},
+      {name:"Baby Dragon",hp:180,maxHp:180,dmg:35,range:80,cost:4,speed:3,img:"https://img.icons8.com/color/96/baby-dragon.png", price:500},
+      {name:"Pekka",hp:700,maxHp:700,dmg:80,range:25,cost:8,speed:1,img:"https://img.icons8.com/color/96/robot.png",       price:800},
+      {name:"Bandit",hp:200,maxHp:200,dmg:40,range:20,cost:4,speed:5,img:"https://img.icons8.com/color/96/ninja.png",      price:500},
+      {name:"Witch",hp:160,maxHp:160,dmg:25,range:180,cost:5,speed:2,img:"https://img.icons8.com/color/96/witch.png",      price:500},
+      {name:"Bowler",hp:300,maxHp:300,dmg:35,range:150,cost:6,speed:2,img:"https://img.icons8.com/color/96/bowling-ball.png", price:600},
+      {name:"Hunter",hp:200,maxHp:200,dmg:50,range:100,cost:4,speed:3,img:"https://img.icons8.com/color/96/shotgun.png",   price:500},
+      {name:"Mega Minion",hp:140,maxHp:140,dmg:30,range:50,cost:3,speed:3,img:"https://img.icons8.com/color/96/minion.png", price:350}
+    ];
+
+    /************ Menu Rendering ************/
+    function renderDeck(ownedMap){
+      const deckEl = document.getElementById("deck");
+      deckEl.innerHTML = "";
+      allCards.forEach(card=>{
+        if(!ownedMap || ownedMap[card.name]) {
+          const d = document.createElement("div");
+          d.className = "card";
+          d.innerHTML = `<div class="elixir-cost">${card.cost}</div><img src="${card.img}"><b>${card.name}</b>`;
+          deckEl.appendChild(d);
+        }
+      });
+    }
+
+    function renderShop(ownedMap, coins){
+      const shop = document.getElementById("shop");
+      shop.innerHTML = "";
+      allCards.forEach(card=>{
+        // Skip free starters in shop (already owned by default)
+        const showInShop = card.price > 0;
+        if(!showInShop) return;
+
+        const owned = !!ownedMap[card.name];
+        const el = document.createElement("div");
+        el.className = "card";
+        el.innerHTML = `
+          <div class="elixir-cost">${card.cost}</div>
+          <img src="${card.img}">
+          <b>${card.name}</b>
+          <div class="price-tag">${card.price} 🪙</div>
+          <div class="${owned ? 'owned' : 'buy-btn'}">${owned ? 'Owned' : 'Buy'}</div>
+        `;
+        if(!owned){
+          const btn = el.querySelector(".buy-btn");
+          btn.onclick = async ()=>{
+            const snap = await playerRef.get();
+            const p = snap.val()||{};
+            const currentCoins = p.coins||0;
+            if(currentCoins < card.price) { alert("Not enough coins!"); return; }
+            // Deduct coins & add to ownedCards
+            await playerRef.child("coins").transaction(c=> (c||0) - card.price);
+            await playerRef.child("ownedCards/"+card.name).set(true);
+          };
+        }
+        shop.appendChild(el);
+      });
+    }
+
+    // Keep deck/shop reflecting ownership & coins
+    playerRef.on("value", snap=>{
+      const p = snap.val()||{};
+      const owned = p.ownedCards || {};
+      renderDeck(owned);
+      renderShop(owned, p.coins||0);
+    });
+
+    /************ Elixir ************/
+    let elixir = 0, maxElixir = 10, elixirRegenRate = 2000, lastElixirTime = Date.now();
+    function initElixirBar(){
+      const bar = document.getElementById("elixirBar");
+      bar.innerHTML = "";
+      for(let i=0;i<maxElixir;i++){
+        const seg = document.createElement("div");
+        seg.className = "elixir-segment"; seg.id = "elixir-"+i;
+        bar.appendChild(seg);
+      }
+    }
+    function updateElixir(){
+      const now = Date.now();
+      if(now - lastElixirTime >= elixirRegenRate && elixir < maxElixir){
+        elixir++; lastElixirTime = now;
+      }
+      for(let i=0;i<maxElixir;i++){
+        const seg = document.getElementById("elixir-"+i);
+        if(!seg) continue;
+        seg.classList.toggle("elixir-filled", i < elixir);
+      }
+    }
+    setInterval(updateElixir, 200);
+
+    /************ Matchmaking + Rooms ************/
+    let roomId = null, mySide = null, isHost = false, searching=false;
+    let actionsRef = null, roomPlayersRef = null;
+
     function findMatch(){
-      startBattle();
+      document.getElementById("statusText").innerText = "Searching...";
+      document.getElementById("battleBtn").style.display = "none";
+      document.getElementById("cancelBtn").style.display = "inline-block";
+      searching = true;
+
+      const queueRef = db.ref("queue");
+      queueRef.once("value").then(snap=>{
+        const q = snap.val();
+        if(q){
+          // Match with the first in queue
+          const oppId = Object.keys(q)[0];
+          roomId = "room-"+Date.now();
+          isHost = true;
+          mySide = "blue";
+          const roomData = {
+            createdAt: firebase.database.ServerValue.TIMESTAMP,
+            state: "active",
+            players: {
+              [playerId]: {connected:true, side:"blue", name: playerName},
+              [oppId]:    {connected:true, side:"red"}
+            }
+          };
+          db.ref("rooms/"+roomId).set(roomData);
+          db.ref("queue/"+oppId).remove();
+          startBattle();
+        } else {
+          // Add self to queue and wait to be placed into a room
+          db.ref("queue/"+playerId).set({name: playerName});
+          db.ref("rooms").on("child_added", snap=>{
+            if(!searching) return;
+            const r = snap.val();
+            if(r && r.players && r.players[playerId] && !roomId){
+              roomId = snap.key;
+              mySide = r.players[playerId].side || "red"; // joiner defaults to red
+              startBattle();
+            }
+          });
+        }
+      });
     }
 
     function cancelSearch(){
-      returnToMenu();
+      searching=false;
+      db.ref("queue/"+playerId).remove();
+      document.getElementById("statusText").innerText="Idle";
+      document.getElementById("battleBtn").style.display="inline-block";
+      document.getElementById("cancelBtn").style.display="none";
+    }
+
+    /************ Battle ************/
+    const canvas = document.getElementById("battleCanvas");
+    const ctx = canvas.getContext("2d");
+    let towers = [];
+    let units = [];
+    let selectedCard = null;
+    let placementCircle = null;
+    const cardCooldowns = {}; // cardName -> availableAt ms
+
+    // battle UI
+    function renderHand(ownedMap){
+      const bar = document.getElementById("cardBar");
+      bar.innerHTML = "";
+      allCards.forEach(c=>{
+        if(!ownedMap[c.name]) return;
+        const d = document.createElement("div"); d.className = "card";
+        d.innerHTML = `<div class="elixir-cost">${c.cost}</div><img src="${c.img}"><b>${c.name}</b>`;
+        const now = Date.now();
+        const cd = cardCooldowns[c.name] || 0;
+        if(cd > now){ d.classList.add("cooldown"); }
+        d.onclick = ()=>{
+          if(cd > Date.now()) return;
+          selectedCard = c;
+          highlightSelected(d);
+        };
+        bar.appendChild(d);
+      });
+    }
+    function highlightSelected(cardEl){
+      document.querySelectorAll("#cardBar .card").forEach(c=>c.classList.remove("selected"));
+      cardEl.classList.add("selected");
+    }
+
+    // Placement circle follows cursor
+    canvas.addEventListener("mousemove", e=>{
+      if(!selectedCard){ placementCircle = null; return; }
+      const rect = canvas.getBoundingClientRect();
+      let x = e.clientX - rect.left, y = e.clientY - rect.top;
+      // clamp to your half
+      if(mySide==="blue"){ if(y < canvas.height/2) y = canvas.height/2; }
+      else { if(y > canvas.height/2) y = canvas.height/2; }
+      placementCircle = {x,y};
+    });
+
+    // Drop card → push action (cooldown 5s)
+    canvas.addEventListener("click", e=>{
+      if(!selectedCard) return;
+      const now = Date.now();
+      if((cardCooldowns[selectedCard.name]||0) > now) return;
+
+      const rect = canvas.getBoundingClientRect();
+      let x = e.clientX - rect.left, y = e.clientY - rect.top;
+
+      if(mySide === "blue" && y < canvas.height/2) return;
+      if(mySide === "red"  && y > canvas.height/2) return;
+
+      if(elixir < selectedCard.cost) return;
+
+      elixir -= selectedCard.cost;
+      cardCooldowns[selectedCard.name] = now + 5000; // 5s cooldown
+      refreshCooldownStyles();
+
+      const action = { player: playerId, card: selectedCard, x, y, timestamp: Date.now() };
+      db.ref("rooms/"+roomId+"/actions").push(action);
+      selectedCard = null;
+      document.querySelectorAll("#cardBar .card").forEach(c=>c.classList.remove("selected"));
+      placementCircle = null;
+    });
+
+    function refreshCooldownStyles(){
+      const now = Date.now();
+      document.querySelectorAll("#cardBar .card").forEach((el, idx)=>{
+        const cName = (function(){
+          // hacky: infer by reading innerText line w/ name (last child <b>)
+          const b = el.querySelector("b"); return b ? b.textContent : "";
+        })();
+        if(!cName) return;
+        const cd = cardCooldowns[cName]||0;
+        el.classList.toggle("cooldown", cd > now);
+      });
     }
 
     function startBattle(){
-      // Hide menu and show battle UI without relying on Firebase
+      searching=false;
+      db.ref("queue/"+playerId).remove();
+
+      // infer mySide if joiner
+      if(!mySide){
+        db.ref("rooms/"+roomId).once("value").then(s=>{ mySide = (s.val().players[playerId].side || "red"); });
+      }
+
+      // screens
       document.getElementById("menuScreen").style.display="none";
       document.getElementById("battleScreen").style.display="block";
       document.getElementById("cardBar").style.display="flex";
       document.getElementById("elixirBar").style.display="flex";
-      document.getElementById("arenaBackground").style.display="block"; // show arena
+      document.getElementById("arenaBackground").style.display="block";
       document.getElementById("statusText").innerText="In Battle";
-      // ... rest of battle init
+
+      // Elixir+hand
+      elixir = 5; lastElixirTime = Date.now(); initElixirBar();
+
+      // towers
+      towers = [
+        {x:150,y:550,hp:600,side:"blue",king:false},
+        {x:650,y:550,hp:600,side:"blue",king:false},
+        {x:400,y:620,hp:1000,side:"blue",king:true},
+        {x:150,y:150,hp:600,side:"red",king:false},
+        {x:650,y:150,hp:600,side:"red",king:false},
+        {x:400,y:80,hp:1000,side:"red",king:true}
+      ];
+      units = [];
+
+      // mark connected & set onDisconnect for room
+      db.ref("rooms/"+roomId+"/players/"+playerId).update({connected:true, side: mySide, name: playerName});
+      db.ref("rooms/"+roomId+"/players/"+playerId).onDisconnect().update({connected:false, lastSeen: firebase.database.ServerValue.TIMESTAMP});
+
+      // render owned hand
+      playerRef.child("ownedCards").once("value").then(s=>{
+        const owned = s.val()||{};
+        renderHand(owned);
+      });
+
+      // listen for actions
+      actionsRef = db.ref("rooms/"+roomId+"/actions");
+      actionsRef.on("child_added", snap=>{
+        const a = snap.val();
+        const side = (a.player === playerId) ? mySide : (mySide==="blue" ? "red" : "blue");
+        spawnUnit(a.card, side, a.x, a.y);
+      });
+
+      requestAnimationFrame(drawBattle);
+    }
+
+    function leaveRoomAndMaybeDelete(){
+      if(!roomId) return;
+      db.ref("rooms/"+roomId+"/players/"+playerId).update({connected:false});
+      // delete if no connected players (or game ended and no one connected)
+      db.ref("rooms/"+roomId+"/players").once("value").then(s=>{
+        let anyConnected=false;
+        s.forEach(c=>{ if(c.val() && c.val().connected) anyConnected=true; });
+        if(!anyConnected){
+          db.ref("rooms/"+roomId).remove();
+        }
+      });
+    }
+
+    window.addEventListener("beforeunload", ()=>{
+      playerRef.update({ online:false, disconnected:true });
+      leaveRoomAndMaybeDelete();
+    });
+
+    /************ Battle simulation ************/
+    function spawnUnit(card, side, x, y){
+      units.push({
+        name: card.name,
+        hp: card.hp, maxHp: card.maxHp,
+        dmg: card.dmg, range: card.range,
+        speed: card.speed,
+        side, x, y,
+        cooldown: 0,
+        dir: (side==="blue" ? -1 : 1) // blue goes up, red goes down
+      });
+    }
+
+    function drawTower(t){
+      if(towerImg.complete){
+        ctx.drawImage(towerImg, t.x-25, t.y-25, 50, 50);
+      } else {
+        ctx.fillStyle = t.side==="blue" ? "blue" : "red";
+        ctx.fillRect(t.x-20, t.y-20, 40, 40);
+      }
+      // HP bar
+      ctx.fillStyle="red"; ctx.fillRect(t.x-20, t.y-35, 40, 5);
+      ctx.fillStyle="lime"; const w = Math.max(0, (t.hp/(t.king?1000:600))*40);
+      ctx.fillRect(t.x-20, t.y-35, w, 5);
+    }
+
+    function drawUnit(u){
+      ctx.fillStyle = (u.side==="blue") ? "cyan" : "red";
+      ctx.beginPath(); ctx.arc(u.x, u.y, 14, 0, Math.PI*2); ctx.fill();
+      // HP bar
+      ctx.fillStyle="red"; ctx.fillRect(u.x-15, u.y-24, 30, 5);
+      ctx.fillStyle="lime"; ctx.fillRect(u.x-15, u.y-24, 30*(u.hp/u.maxHp), 5);
+    }
+
+    function updateUnits(){
+      units.forEach(u=>{
+        // move
+        u.y += u.dir * u.speed;
+
+        // cooldown tick
+        if(u.cooldown>0) u.cooldown--;
+
+        // attack towers in range
+        for(const t of towers){
+          if(t.side === u.side) continue;
+          const dx = Math.abs(u.x - t.x), dy = Math.abs(u.y - t.y);
+          if(dx < 30 && dy < 30){
+            if(u.cooldown<=0){
+              t.hp -= u.dmg;
+              u.cooldown = 30; // every ~0.5s at 60fps-ish
+            }
+          }
+        }
+      });
+
+      // remove dead units
+      units = units.filter(u=>u.hp>0);
+    }
+
+    let gameOver = false;
+    function drawBattle(){
+      // clear
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+
+      // towers, end condition
+      towers.forEach(t=>{
+        drawTower(t);
+        if(!gameOver && t.hp<=0 && t.king){
+          const winnerColor = (t.side === "blue") ? "Red" : "Blue";
+          endGame(winnerColor);
+        }
+      });
+
+      // units
+      updateUnits();
+      units.forEach(drawUnit);
+
+      // placement circle
+      if(placementCircle && selectedCard){
+        ctx.strokeStyle="white"; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.arc(placementCircle.x, placementCircle.y, 24, 0, Math.PI*2); ctx.stroke();
+      }
+
+      if(!gameOver) requestAnimationFrame(drawBattle);
+    }
+
+    function awardWinToSelfIfNeeded(winnerColor){
+      const iWon = (winnerColor==="Blue" && mySide==="blue") || (winnerColor==="Red" && mySide==="red");
+      if(!iWon) return;
+      // +100 coins, +5 trophies (transaction-safe)
+      playerRef.child("coins").transaction(c => (c||0)+100);
+      playerRef.child("trophies").transaction(t => (t||0)+5);
+    }
+
+    function endGame(winnerColor){
+      if(gameOver) return;
+      gameOver = true;
+
+      // mark room ended (do not delete immediately, let both see banner)
+      db.ref("rooms/"+roomId+"/state").set("ended");
+      db.ref("rooms/"+roomId+"/winner").set(winnerColor);
+
+      awardWinToSelfIfNeeded(winnerColor);
+
+      // UI banner
+      document.getElementById("resultText").innerText =
+        ( (winnerColor==="Blue" && mySide==="blue") || (winnerColor==="Red" && mySide==="red") )
+          ? "🏆 Victory!" : "❌ Defeat";
+      document.getElementById("rewardText").innerText =
+        ( (winnerColor==="Blue" && mySide==="blue") || (winnerColor==="Red" && mySide==="red") )
+          ? "+100 Coins, +5 Trophies" : "Better luck next time!";
+
+      document.getElementById("resultScreen").style.display="block";
     }
 
     function returnToMenu(){
       document.getElementById("resultScreen").style.display="none";
       document.getElementById("battleScreen").style.display="none";
       document.getElementById("menuScreen").style.display="block";
-      document.getElementById("arenaBackground").style.display="none"; // hide arena
+      document.getElementById("arenaBackground").style.display="none";
       document.getElementById("cardBar").style.display="none";
       document.getElementById("elixirBar").style.display="none";
       document.getElementById("statusText").innerText="Idle";
-      // body background stays menu-bg.png, no changes needed
+
+      // detach listeners
+      if(actionsRef) actionsRef.off();
+      if(roomPlayersRef) roomPlayersRef.off();
+
+      // leave & maybe delete room
+      leaveRoomAndMaybeDelete();
+
+      // reset battle state
+      placementCircle = null;
+      selectedCard = null;
+      gameOver = false;
+      roomId = null; mySide = null; isHost = false;
     }
+
+    /************ Simple Menu Buttons for Demo ************/
+    // (Battle button hooks into real matchmaking above)
   </script>
 </body>
 </html>
