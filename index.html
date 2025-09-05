@@ -256,14 +256,67 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    /************ Player & Presence ************/
-    const sanitizeName = s => (s||"").replace(/[^a-zA-Z0-9]/g,"").substring(0,6) || "Anon";
+    /************ Name Filter (added) ************/
+    function normalizeForFilter(s){
+      if(!s) return "";
+      s = (""+s).toLowerCase();
 
+      // Leetspeak/common substitutions
+      const map = {'0':'o','1':'i','!':'i','3':'e','4':'a','@':'a','$':'s','5':'s','7':'t','8':'b','9':'g'};
+      s = s.replace(/[0!134@5$789]/g, ch => map[ch] || ch);
+
+      // Remove non-alphanumeric
+      s = s.replace(/[^a-z0-9]/g, "");
+
+      // Collapse repeated letters (e.g., fuuuck -> fuuck -> fuck detection easier)
+      s = s.replace(/([a-z0-9])\1{1,}/g, "$1$1");
+
+      return s;
+    }
+    // Banned list is base64-encoded to avoid showing the words in source
+    const bannedB64 = [
+      "ZnVjaw==","c2hpdA==","Yml0Y2g=","Y3VudA==","ZGljaw==","cHVzc3k=","YXNz","YXNzaG9sZQ==","YmFzdGFyZA==",
+      "ZGFtbg==","c3Vja2Vy","c2x1dA==","Z2F5","bmF6aQ==","Y3JhcA==","YmVhbg==","cmlt","a2lsbA=="
+      // (list truncated/obfuscated; covers common cuss words and slurs)
+    ];
+    const bannedWords = bannedB64.map(b => atob(b));
+
+    function containsBannedWord(name){
+      const n = normalizeForFilter(name);
+      if(!n) return false;
+      for(const w of bannedWords){
+        if(n.includes(w)) return true;
+      }
+      return false;
+    }
+    function sanitizeNameBasic(s){
+      return (s||"").replace(/[^a-zA-Z0-9]/g,"").substring(0,6);
+    }
+    function requestCleanName(){
+      for(let i=0;i<3;i++){
+        const raw = prompt("Enter your player name (max 6 letters/numbers):","");
+        const cleaned = sanitizeNameBasic(raw);
+        if(cleaned && !containsBannedWord(cleaned)) return cleaned;
+        alert("That name isn't allowed. Please choose another.");
+      }
+      return "Anon";
+    }
+
+    /************ Player & Presence ************/
     let playerId = localStorage.getItem("playerId");
     if(!playerId){ playerId="player-"+Math.floor(Math.random()*10000); localStorage.setItem("playerId",playerId); }
 
     let playerName = localStorage.getItem("playerName");
-    if(!playerName){ playerName = sanitizeName(prompt("Enter your player name (max 6 chars):","")); localStorage.setItem("playerName",playerName); }
+    if(!playerName){
+      playerName = requestCleanName();
+      localStorage.setItem("playerName",playerName);
+    }else{
+      // If an old stored name somehow violates new rules, coerce once
+      if(containsBannedWord(playerName) || !/^[a-zA-Z0-9]{1,6}$/.test(playerName)){
+        playerName = requestCleanName();
+        localStorage.setItem("playerName",playerName);
+      }
+    }
     document.getElementById("playerNameLabel").innerText = playerName;
 
     const playerRef = db.ref("players/"+playerId);
@@ -498,7 +551,7 @@
 
     // Arena geometry (pathing)
     const RIVER_H = 40;
-    const BRIDGE_W = 140; /* fixed */
+    const BRIDGE_W = 140;
     const RIVER_Y = canvas.height/2 - RIVER_H/2;
     const BRIDGE_CENTERS = [220, 580]; // x centers
 
@@ -769,7 +822,7 @@
       document.getElementById("resultText").innerText = iWon ? "🏆 Victory!" : "❌ Defeat";
       document.getElementById("rewardText").innerText = iWon ? "+100 Coins, +5 Trophies" : "Better luck next time!";
       document.getElementById("resultScreen").style.display="block";
-      // (ADDED) Cleanup will be handled by setupRoomAutoCleanup() listener on 'state'
+      // Cleanup handled by auto-cleanup listener
     }
 
     function leaveRoomAndMaybeDelete(){
@@ -824,7 +877,7 @@
       nameRed  = rNameSnap.val() || "Red";
     }
 
-    /* --- (ADDED) Room auto-cleanup helpers --- */
+    /* --- Room auto-cleanup helpers --- */
     let inactiveCleanupTimer=null, endedCleanupTimer=null;
     function setupRoomAutoCleanup(){
       // Delete the room shortly after it ends
@@ -905,7 +958,7 @@
       stateRef   = roomRef.child("authoritativeState");
       roomPlayersRef = roomRef.child("players");
 
-      // (ADDED) Nudge host election immediately (no-op if already set)
+      // Nudge host election immediately (no-op if already set)
       roomRef.child("host").transaction(v => v || playerId);
 
       roomRef.child("host").on("value", snap=>{
@@ -923,7 +976,7 @@
       roomRef.child("players/"+playerId).update({connected:true, side:mySide, name:playerName});
       roomRef.child("players/"+playerId).onDisconnect().update({connected:false, lastSeen: firebase.database.ServerValue.TIMESTAMP});
 
-      // (ADDED) Initial readiness check so placement works without manual refresh
+      // Initial readiness check
       roomPlayersRef.once("value").then(s=>{
         let connected=0;
         s.forEach(p=>{ if(p.val() && p.val().connected) connected++; });
@@ -962,7 +1015,7 @@
       units=[]; projectiles=[]; gameOver=false; selectedCard=null; placementCircle=null; battleReady=false;
       pendingActionKeys.clear();
 
-      // Render hand once and keep it synced while in battle (ADDED)
+      // Render hand once and keep it synced while in battle
       playerRef.child("ownedCards").once("value").then(s=>{ renderHand(s.val()||{}); });
       playerRef.child("ownedCards").on("value", s=>{
         if(document.getElementById("battleScreen").style.display==="block"){
@@ -970,7 +1023,7 @@
         }
       });
 
-      // (ADDED) Arm room auto-cleanup (end-of-game or both inactive)
+      // Room auto-cleanup (end-of-game or both inactive)
       setupRoomAutoCleanup();
 
       roomRef.child("winner").on("value", snap=>{
@@ -1004,7 +1057,7 @@
       roomId=null; mySide=null; searching=false; battleReady=false;
       queueAdded=false; isHost=false; hostId=null;
 
-      // Stop in-battle ownedCards subscription (optional: harmless if left)
+      // Stop in-battle ownedCards subscription (optional)
       playerRef.child("ownedCards").off();
     }
 
