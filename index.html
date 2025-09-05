@@ -82,6 +82,30 @@
     #resultScreen button{
       margin-top:30px; padding:15px 40px; font-size:20px; border:none; border-radius:12px; cursor:pointer; background:gold; color:#000;
     }
+
+    /* --- CHANGELOG MODAL (added, does not touch game code) --- */
+    #changelogOverlay{
+      position:fixed; inset:0; background:rgba(0,0,0,0.65);
+      display:none; align-items:center; justify-content:center; z-index:20;
+    }
+    #changelogModal{
+      width:520px; max-width:calc(100% - 40px);
+      background:#111828; color:#e5e7eb;
+      border:2px solid #3b82f6; border-radius:18px;
+      box-shadow:0 20px 40px rgba(0,0,0,0.45);
+      padding:20px 20px 14px; position:relative;
+    }
+    #changelogTitle{ margin:0 0 10px; font-size:20px; }
+    #changelogList{ margin:0 0 8px 18px; padding:0; }
+    #changelogList li{ margin:6px 0; }
+    #changelogClose{
+      position:absolute; top:8px; right:8px;
+      width:32px; height:32px; border-radius:50%;
+      border:2px solid #93c5fd; background:#1f2937; color:#e5e7eb;
+      font-size:18px; line-height:26px; cursor:pointer;
+    }
+    #changelogClose:hover{ background:#374151; }
+    #changelogHint{ opacity:0.7; font-size:12px; }
   </style>
 
   <!-- Firebase compat SDKs -->
@@ -168,6 +192,25 @@
     <h1 id="resultText"></h1>
     <p id="rewardText"></p>
     <button onclick="returnToMenu()">OK</button>
+  </div>
+
+  <!-- CHANGELOG MODAL (added) -->
+  <div id="changelogOverlay" role="dialog" aria-modal="true" aria-labelledby="changelogTitle">
+    <div id="changelogModal">
+      <button id="changelogClose" aria-label="Close changelog">×</button>
+      <h3 id="changelogTitle">What’s new in Flash Royale</h3>
+      <ul id="changelogList">
+        <li>Host-authoritative netcode: both players see the same placements & damage.</li>
+        <li>Units cross bridges, then target enemy towers, stopping to attack in range.</li>
+        <li>Tower AI that shoots back; health bars on towers & units.</li>
+        <li>Strict 1v1 matchmaking with multiple simultaneous rooms.</li>
+        <li>Elixir bar (10 segments, +1 per 2s), 5s card cooldown after use.</li>
+        <li>Shop with 24 characters; safe coin deductions; +100 coins & +5 trophies on win.</li>
+        <li>Rejoin after refresh; rooms auto-clean when both players leave.</li>
+        <li>Player names shown by king castles; placement only on your half.</li>
+      </ul>
+      <div id="changelogHint">Click × to close</div>
+    </div>
   </div>
 
   <script>
@@ -605,7 +648,6 @@
 
     function updateUnits(){
       units.forEach(u=>{
-        // Pathing to cross bridges first
         if(u.pathStage==='toBridge'){
           if(moveTowards(u, u.targetX, u.targetY)){
             u.pathStage='crossing';
@@ -620,35 +662,27 @@
           return;
         }
 
-        // After crossing: acquire/maintain nearest enemy tower as goal
         if(!u.goal || u.goal.hp<=0){
           u.goal = nearestEnemyTower(u);
         }
-        if(!u.goal){
-          // no towers left (host's win check happens elsewhere)
-          return;
-        }
+        if(!u.goal){ return; }
 
-        // Distance to target tower
         const dx=u.goal.x - u.x, dy=u.goal.y - u.y;
         const dist = Math.hypot(dx,dy);
         const attackRange = Math.max(20, u.range||25);
 
         if(dist <= attackRange){
-          // ATTACK: stop moving while attacking
           if(u.cooldown<=0){
             u.goal.hp -= u.dmg;
             u.cooldown = 30; // ~0.5s
           }
         } else {
-          // MOVE toward tower
           moveTowards(u, u.goal.x, u.goal.y);
         }
 
         if(u.cooldown>0) u.cooldown--;
       });
 
-      // cull dead units
       units = units.filter(u=>u.hp>0);
     }
 
@@ -776,7 +810,6 @@
         updateUnits();
         updateProjectiles();
 
-        // win check (king down)
         for(const t of towers){
           if(t.hp<=0 && t.king){
             const winner = (t.side==="blue") ? "Red" : "Blue";
@@ -785,7 +818,6 @@
           }
         }
 
-        // publish authoritative state ~10fps
         if(ts - lastPublishTime >= PUBLISH_MS){
           lastPublishTime = ts;
           stateRef.set({
@@ -795,7 +827,6 @@
         }
       }
 
-      // draw projectiles + units
       projectiles.forEach(p=>{ ctx.fillStyle="#ffd86b"; ctx.beginPath(); ctx.arc(p.x,p.y,5,0,Math.PI*2); ctx.fill(); });
       units.forEach(drawUnit);
 
@@ -811,24 +842,20 @@
       searching=false; db.ref("queue/"+playerId).remove();
       if(pairInterval){ clearInterval(pairInterval); pairInterval=null; }
 
-      // UI
       document.getElementById("menuScreen").style.display="none";
       document.getElementById("battleScreen").style.display="block";
       document.getElementById("cardBar").style.display="flex";
       document.getElementById("elixirBar").style.display="flex";
       document.getElementById("statusText").innerText="In Battle (waiting for opponent…)";
 
-      // refs
       roomRef = db.ref("rooms/"+roomId);
       actionsRef = roomRef.child("actions");
       stateRef   = roomRef.child("authoritativeState");
       roomPlayersRef = roomRef.child("players");
 
-      // role
       roomRef.child("host").on("value", snap=>{
         hostId = snap.val();
         isHost = (hostId === playerId);
-        // switch listeners accordingly
         if(isHost){
           if(stateRef) stateRef.off();
           attachHostListeners();
@@ -838,11 +865,9 @@
         }
       });
 
-      // ensure presence in room
       roomRef.child("players/"+playerId).update({connected:true, side:mySide, name:playerName});
       roomRef.child("players/"+playerId).onDisconnect().update({connected:false, lastSeen: firebase.database.ServerValue.TIMESTAMP});
 
-      // both connected?
       roomPlayersRef.on("value", s=>{
         let connected=0, hostConnected=false;
         s.forEach(p=>{
@@ -852,20 +877,15 @@
         });
         battleReady = (connected>=2);
         document.getElementById("statusText").innerText = battleReady ? "In Battle" : "In Battle (waiting for opponent…)";
-
-        // host migration
         if(!hostConnected && battleReady && hostId!==playerId){
           roomRef.child("host").transaction(v => v || playerId);
         }
       });
 
-      // names
       loadRoomNames();
 
-      // elixir
       elixir=5; lastElixirTime=Date.now(); initElixirBar();
 
-      // towers initial
       towers=[
         // Blue
         {x:200,y:560,hp:600,side:"blue",king:false, range:200, dmg:22, cdMax:60},
@@ -879,10 +899,8 @@
       units=[]; projectiles=[]; gameOver=false; selectedCard=null; placementCircle=null; battleReady=false;
       pendingActionKeys.clear();
 
-      // hand
       playerRef.child("ownedCards").once("value").then(s=>{ renderHand(s.val()||{}); });
 
-      // winner listener (for non-host as well)
       roomRef.child("winner").on("value", snap=>{
         const w=snap.val(); if(!w || gameOver) return;
         const iWon = (w==="Blue" && mySide==="blue") || (w==="Red" && mySide==="red");
@@ -914,6 +932,27 @@
       roomId=null; mySide=null; searching=false; battleReady=false;
       queueAdded=false; isHost=false; hostId=null;
     }
+  </script>
+
+  <!-- CHANGELOG SCRIPT (added, self-contained) -->
+  <script>
+    (function(){
+      function showChangelog(){
+        var ov=document.getElementById('changelogOverlay');
+        if(ov){ ov.style.display='flex'; }
+      }
+      function hideChangelog(){
+        var ov=document.getElementById('changelogOverlay');
+        if(ov){ ov.style.display='none'; }
+      }
+      document.addEventListener('DOMContentLoaded', function(){
+        var btn=document.getElementById('changelogClose');
+        var ov=document.getElementById('changelogOverlay');
+        if(btn){ btn.addEventListener('click', hideChangelog); }
+        if(ov){ ov.addEventListener('click', function(e){ if(e.target===ov) hideChangelog(); }); }
+        showChangelog();
+      });
+    })();
   </script>
 </body>
 </html>
