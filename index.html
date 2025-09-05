@@ -4,76 +4,91 @@
   <meta charset="UTF-8" />
   <title>Flash Royale</title>
   <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      width: 100%;
-      height: 100%;
-      color: white;
-      user-select: none;
-      overflow: hidden;
-      background: url('dark-castle.png') no-repeat center center fixed;
-      background-size: cover;
+    :root{
+      --hud-bg: rgba(10,15,30,0.70);
+      --hud-border:#1e3d59;
+    }
+    /* Keep body simple; we draw menu bg via inline SVG behind everything */
+    body{
+      margin:0; font-family:Arial, sans-serif; color:#fff; user-select:none; overflow:hidden;
+      background:#0b0f1c;
     }
 
-    .top-bar {
-      display:flex;justify-content:space-between;align-items:center;
-      padding:10px 20px;background:rgba(10,15,30,0.7);
-      border-bottom:3px solid #1e3d59;font-size:14px;
+    /* Top HUD */
+    .top-bar{
+      display:flex; justify-content:space-between; align-items:center;
+      padding:10px 20px; background:var(--hud-bg); border-bottom:3px solid var(--hud-border);
+      font-size:14px; position:relative; z-index:3;
     }
-    .currency{display:flex;gap:15px;}
-    .currency div{background:#2d3e50;padding:5px 12px;border-radius:8px;display:flex;align-items:center;gap:5px;}
-    #onlineCount { margin-left: 15px; font-weight: bold; }
+    .currency{display:flex; gap:15px;}
+    .currency div{background:#2d3e50; padding:5px 12px; border-radius:8px; display:flex; align-items:center; gap:6px;}
+    #onlineCount{ margin-left:12px; font-weight:bold; }
 
-    .screen{display:none;height:100vh;}
-    #menuScreen { display:block; text-align:center; overflow:auto; padding-bottom:120px; }
-    #battleScreen { text-align:center; display:none; position:relative; }
+    /* Menu & Battle screens */
+    .screen{ display:none; height:calc(100vh - 56px); position:relative; }
+    #menuScreen{ display:block; text-align:center; padding-bottom:120px; overflow:auto; }
+    #battleScreen{ display:none; text-align:center; position:relative; }
 
-    .battle-btn{background:#ffcc00;padding:20px 60px;border-radius:20px;font-size:32px;color:black;cursor:pointer;margin-top:20px;border:3px solid #fff;box-shadow:0 0 25px rgba(255,255,0,0.9);}
-    .cancel-btn{background:#ff4444;padding:15px 40px;border-radius:15px;font-size:24px;color:white;cursor:pointer;margin-top:20px;border:3px solid #fff;box-shadow:0 0 20px rgba(255,0,0,0.7);display:none;}
-
-    .deck,.shop{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px auto;max-width:520px;}
-    .card{position:relative;border-radius:12px;overflow:hidden;text-align:center;font-size:12px;cursor:pointer;background:linear-gradient(to bottom,#333,#111);border:3px solid #888;box-shadow:0 3px 8px rgba(0,0,0,0.6);padding:8px;}
-    .card img{width:70%;margin:5px auto;}
-    .card.selected{border:3px solid cyan;box-shadow:0 0 15px cyan;}
-    .elixir-cost{position:absolute;top:5px;left:5px;background:#9c27b0;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold;border:2px solid white;}
-    .price-tag{position:absolute;bottom:5px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);padding:2px 6px;border-radius:6px;font-size:12px;}
-
-    .shop .buy-btn{margin-top:6px;padding:6px 10px;border-radius:8px;border:2px solid #fff;background:#28a745;color:#fff;cursor:pointer;}
-    .shop .owned{margin-top:6px;padding:6px 10px;border-radius:8px;border:2px solid #888;background:#444;color:#aaa;}
-
-    #arenaBackground {
-      display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-      max-width:100%; max-height:100%; object-fit:contain; z-index:0;
+    .battle-btn{
+      background:#ffcc00; padding:20px 60px; border-radius:20px; font-size:32px; color:#000; cursor:pointer; margin-top:20px;
+      border:3px solid #fff; box-shadow:0 0 25px rgba(255,255,0,0.9);
     }
-    #battleCanvas {
-      position:relative; background:transparent; border:3px solid white;
-      margin-top:20px; display:block; margin-left:auto; margin-right:auto; z-index:1;
+    .cancel-btn{
+      background:#ff4444; padding:15px 40px; border-radius:15px; font-size:24px; color:#fff; cursor:pointer; margin-top:20px;
+      border:3px solid #fff; box-shadow:0 0 20px rgba(255,0,0,0.7); display:none;
     }
+
+    .deck,.shop{
+      display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:20px auto; max-width:540px; position:relative; z-index:2;
+    }
+    .card{
+      position:relative; border-radius:12px; overflow:hidden; text-align:center; font-size:12px; cursor:pointer;
+      background:linear-gradient(to bottom, #2f3345, #151826); border:3px solid #889; box-shadow:0 3px 8px rgba(0,0,0,0.6); padding:8px;
+    }
+    .card img{ width:70%; margin:5px auto; display:block; }
+    .card.selected{ border:3px solid cyan; box-shadow:0 0 15px cyan; }
+    .card.cooldown{ opacity:0.45; pointer-events:none; filter:grayscale(0.5); }
+    .elixir-cost{
+      position:absolute; top:5px; left:5px; background:#9c27b0; border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center;
+      font-size:14px; font-weight:bold; border:2px solid #fff;
+    }
+    .price-tag{ position:absolute; bottom:6px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.6); padding:2px 6px; border-radius:6px; font-size:12px; }
+    .shop .buy-btn{ margin-top:6px; padding:6px 10px; border-radius:8px; border:2px solid #fff; background:#28a745; color:#fff; cursor:pointer; }
+    .shop .owned{ margin-top:6px; padding:6px 10px; border-radius:8px; border:2px solid #888; background:#444; color:#aaa; }
+
+    /* Procedural menu background (SVG) */
+    #menuBg{
+      position:fixed; inset:0; z-index:0; pointer-events:none;
+    }
+
+    /* Arena (drawn on canvas) */
+    #battleCanvas{
+      position:relative; background:transparent; border:3px solid #fff; margin:20px auto 0; display:block; z-index:1;
+    }
+
+    /* Battle UI at bottom */
     #cardBar{
       position:fixed; bottom:100px; left:50%; transform:translateX(-50%);
       display:none; gap:10px; z-index:5;
     }
-    #elixirBar {
+    #elixirBar{
       position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
-      width:500px; height:24px; border:2px solid white; border-radius:10px; background:#222;
+      width:500px; height:24px; border:2px solid #fff; border-radius:10px; background:#222;
       display:none; justify-content:space-between; padding:2px; z-index:5;
     }
-    .elixir-segment { flex:1; margin:0 1px; background:#444; border-radius:4px; }
-    .elixir-filled { background:purple; }
-    .cooldown { opacity:0.45; pointer-events:none; filter:grayscale(0.5); }
+    .elixir-segment{ flex:1; margin:0 1px; background:#444; border-radius:4px; }
+    .elixir-filled{ background:purple; }
 
-    /* Victory/Defeat */
-    #resultScreen {
-      display:none; position:fixed; top:0; left:0; width:100%; height:100%;
-      background:rgba(0,0,0,0.8); color:white; text-align:center; font-size:32px;
-      padding-top:200px; z-index:10;
+    /* Result overlay */
+    #resultScreen{
+      display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8);
+      color:#fff; text-align:center; font-size:32px; padding-top:200px; z-index:10;
     }
-    #resultScreen button {
-      margin-top:30px; padding:15px 40px; font-size:20px; border:none;
-      border-radius:12px; cursor:pointer; background:gold; color:black;
+    #resultScreen button{
+      margin-top:30px; padding:15px 40px; font-size:20px; border:none; border-radius:12px; cursor:pointer; background:gold; color:#000;
     }
   </style>
+
   <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -82,7 +97,7 @@
   <!-- Top HUD -->
   <div class="top-bar">
     <div class="currency">
-      <div><img src="https://img.icons8.com/emoji/48/000000/coin-emoji.png"/> <span id="coinCount">0</span></div>
+      <div><img src="https://img.icons8.com/emoji/48/000000/coin-emoji.png" width="18" height="18"/> <span id="coinCount">0</span></div>
     </div>
     <div>
       <span id="statusText">Idle</span>
@@ -90,7 +105,63 @@
     </div>
   </div>
 
-  <!-- Menu -->
+  <!-- MENU BACKGROUND (BUILT-IN) -->
+  <svg id="menuBg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+    <defs>
+      <linearGradient id="sky" x1="0" x2="0" y1="0" y2="1">
+        <stop offset="0%" stop-color="#0b1228"/>
+        <stop offset="60%" stop-color="#0b0f1c"/>
+        <stop offset="100%" stop-color="#09101e"/>
+      </linearGradient>
+      <linearGradient id="mist" x1="0" x2="0" y1="0" y2="1">
+        <stop offset="0%" stop-color="#1c2444" stop-opacity="0.0"/>
+        <stop offset="100%" stop-color="#1c2444" stop-opacity="0.35"/>
+      </linearGradient>
+      <linearGradient id="ground" x1="0" x2="0" y1="0" y2="1">
+        <stop offset="0%" stop-color="#0d1a2b"/>
+        <stop offset="100%" stop-color="#0a1524"/>
+      </linearGradient>
+    </defs>
+    <!-- Sky -->
+    <rect width="1920" height="1080" fill="url(#sky)"/>
+    <!-- Distant hills -->
+    <path d="M0,720 C300,640 500,700 800,660 C1150,610 1450,690 1920,620 L1920,1080 L0,1080 Z" fill="#0c162e"/>
+    <path d="M0,760 C350,700 550,760 850,740 C1200,710 1500,760 1920,700 L1920,1080 L0,1080 Z" fill="#0e1a35"/>
+    <!-- Ground fog -->
+    <rect y="650" width="1920" height="430" fill="url(#mist)"/>
+    <!-- Castle silhouette -->
+    <g transform="translate(960,520) scale(1.0)" fill="#1a2748" opacity="0.9">
+      <!-- base wall -->
+      <rect x="-260" y="-60" width="520" height="200"/>
+      <!-- left tower -->
+      <rect x="-330" y="-150" width="70" height="290"/>
+      <rect x="-330" y="-190" width="70" height="40"/>
+      <!-- right tower -->
+      <rect x="260" y="-150" width="70" height="290"/>
+      <rect x="260" y="-190" width="70" height="40"/>
+      <!-- center keep -->
+      <rect x="-90" y="-220" width="180" height="360"/>
+      <polygon points="-90,-220 0,-320 90,-220"/>
+      <!-- teeth -->
+      <g>
+        <rect x="-260" y="-60" width="30" height="30"/>
+        <rect x="-210" y="-60" width="30" height="30"/>
+        <rect x="-160" y="-60" width="30" height="30"/>
+        <rect x="-110" y="-60" width="30" height="30"/>
+        <rect x="-60" y="-60" width="30" height="30"/>
+        <rect x="-10" y="-60" width="30" height="30"/>
+        <rect x="40" y="-60" width="30" height="30"/>
+        <rect x="90" y="-60" width="30" height="30"/>
+        <rect x="140" y="-60" width="30" height="30"/>
+        <rect x="190" y="-60" width="30" height="30"/>
+        <rect x="240" y="-60" width="30" height="30"/>
+      </g>
+    </g>
+    <!-- Foreground gradient -->
+    <rect y="800" width="1920" height="280" fill="url(#ground)"/>
+  </svg>
+
+  <!-- MENU -->
   <div id="menuScreen" class="screen">
     <h2>🏆 Flash Royale</h2>
     <p>Name: <b id="playerNameLabel"></b></p>
@@ -106,17 +177,16 @@
     <div class="shop" id="shop"></div>
   </div>
 
-  <!-- Battle -->
+  <!-- BATTLE -->
   <div id="battleScreen" class="screen">
-    <img id="arenaBackground" src="arena-bg.png" width="800" height="700"/>
     <canvas id="battleCanvas" width="800" height="700"></canvas>
   </div>
 
-  <!-- Bottom UI (Battle only) -->
+  <!-- Battle UI -->
   <div id="cardBar"></div>
   <div id="elixirBar"></div>
 
-  <!-- Result Screen -->
+  <!-- Result -->
   <div id="resultScreen">
     <h1 id="resultText"></h1>
     <p id="rewardText"></p>
@@ -138,214 +208,182 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    /************ Assets ************/
-    const towerImg = new Image();
-    towerImg.src = "mini-castle.png";
-
-    /************ Player + Presence ************/
+    /************ Player & Presence ************/
     const sanitizeName = s => (s||"").replace(/[^a-zA-Z0-9]/g,"").substring(0,6) || "Anon";
 
     let playerId = localStorage.getItem("playerId");
-    if(!playerId){ playerId = "player-"+Math.floor(Math.random()*10000); localStorage.setItem("playerId", playerId); }
+    if(!playerId){ playerId="player-"+Math.floor(Math.random()*10000); localStorage.setItem("playerId",playerId); }
 
     let playerName = localStorage.getItem("playerName");
-    if(!playerName){
-      playerName = sanitizeName(prompt("Enter your player name (max 6 chars):",""));
-      localStorage.setItem("playerName", playerName);
-    }
+    if(!playerName){ playerName = sanitizeName(prompt("Enter your player name (max 6 chars):","")); localStorage.setItem("playerName",playerName); }
     document.getElementById("playerNameLabel").innerText = playerName;
 
     const playerRef = db.ref("players/"+playerId);
 
-    // Initialize player if missing; do NOT overwrite coins/trophies if already exist.
+    // Initialize if missing, set starting coins=400; don't overwrite existing progress
     playerRef.once("value").then(snap=>{
       if(!snap.exists()){
         playerRef.set({
           name: playerName,
           online: true,
           disconnected: false,
-          coins: 0,
+          coins: 400,           // start with 400
           trophies: 0,
           ownedCards: { "Knight": true, "Archer": true, "Golem": true, "Dragon": true }
         });
       } else {
-        playerRef.update({ name: playerName, online: true, disconnected: false });
+        const p = snap.val()||{};
+        const updates = { name:playerName, online:true, disconnected:false };
+        if(p.coins === undefined || p.coins === null) updates.coins = 400; // one-time default for legacy users
+        playerRef.update(updates);
       }
     });
 
-    // Keep HUD in sync with Firebase values
-    playerRef.on("value", snap=>{
-      const p = snap.val() || {};
-      document.getElementById("coinCount").innerText = p.coins || 0;
-      document.getElementById("trophies").innerText = p.trophies || 0;
+    // HUD sync
+    playerRef.on("value", s=>{
+      const p = s.val()||{};
+      document.getElementById("coinCount").innerText = p.coins||0;
+      document.getElementById("trophies").innerText = p.trophies||0;
     });
 
     // Online count
     db.ref("players").on("value", snap=>{
-      let online = 0;
-      snap.forEach(c=>{ if(c.val() && c.val().online) online++; });
-      document.getElementById("onlineCount").innerText = "Online: " + online;
+      let online=0; snap.forEach(c=>{ if(c.val() && c.val().online) online++; });
+      document.getElementById("onlineCount").innerText = "Online: "+online;
     });
 
-    // Presence
+    // Presence flags
     playerRef.onDisconnect().update({ online:false, disconnected:true });
 
-    /************ Characters (24 total) + prices ************/
+    /************ Cards (24 total) ************/
     const allCards = [
-      {name:"Knight",hp:200,maxHp:200,dmg:20,range:20,cost:3,speed:2,img:"https://img.icons8.com/color/96/knight.png",   price:0},
-      {name:"Archer",hp:120,maxHp:120,dmg:15,range:120,cost:3,speed:2,img:"https://img.icons8.com/color/96/bow.png",      price:0},
-      {name:"Golem",hp:400,maxHp:400,dmg:30,range:20,cost:6,speed:1,img:"https://img.icons8.com/color/96/rock.png",        price:0},
-      {name:"Dragon",hp:150,maxHp:150,dmg:40,range:100,cost:5,speed:3,img:"https://img.icons8.com/color/96/dragon.png",    price:0},
+      {name:"Knight",hp:200,maxHp:200,dmg:20,range:20,cost:3,speed:2,img:"https://img.icons8.com/color/96/knight.png", price:0},
+      {name:"Archer",hp:120,maxHp:120,dmg:15,range:120,cost:3,speed:2,img:"https://img.icons8.com/color/96/bow.png", price:0},
+      {name:"Golem",hp:400,maxHp:400,dmg:30,range:20,cost:6,speed:1,img:"https://img.icons8.com/color/96/rock.png", price:0},
+      {name:"Dragon",hp:150,maxHp:150,dmg:40,range:100,cost:5,speed:3,img:"https://img.icons8.com/color/96/dragon.png", price:0},
 
-      {name:"Wizard",hp:160,maxHp:160,dmg:35,range:150,cost:5,speed:2,img:"https://img.icons8.com/color/96/wizard.png",    price:500},
-      {name:"Goblin",hp:90,maxHp:90,dmg:12,range:15,cost:2,speed:4,img:"https://img.icons8.com/color/96/goblin.png",       price:200},
-      {name:"Barbarian",hp:220,maxHp:220,dmg:25,range:20,cost:4,speed:2,img:"https://img.icons8.com/color/96/barbarian.png",price:400},
+      {name:"Wizard",hp:160,maxHp:160,dmg:35,range:150,cost:5,speed:2,img:"https://img.icons8.com/color/96/wizard.png", price:500},
+      {name:"Goblin",hp:90,maxHp:90,dmg:12,range:15,cost:2,speed:4,img:"https://img.icons8.com/color/96/goblin.png", price:200},
+      {name:"Barbarian",hp:220,maxHp:220,dmg:25,range:20,cost:4,speed:2,img:"https://img.icons8.com/color/96/barbarian.png", price:400},
       {name:"Ice Spirit",hp:80,maxHp:80,dmg:10,range:10,cost:1,speed:5,img:"https://img.icons8.com/color/96/snowflake.png", price:150},
-      {name:"Giant",hp:600,maxHp:600,dmg:45,range:25,cost:7,speed:1,img:"https://img.icons8.com/color/96/giant.png",       price:700},
+      {name:"Giant",hp:600,maxHp:600,dmg:45,range:25,cost:7,speed:1,img:"https://img.icons8.com/color/96/giant.png", price:700},
       {name:"Musketeer",hp:140,maxHp:140,dmg:30,range:200,cost:4,speed:2,img:"https://img.icons8.com/color/96/musket.png", price:450},
-      {name:"Prince",hp:280,maxHp:280,dmg:50,range:20,cost:5,speed:3,img:"https://img.icons8.com/color/96/prince.png",     price:600},
+      {name:"Prince",hp:280,maxHp:280,dmg:50,range:20,cost:5,speed:3,img:"https://img.icons8.com/color/96/prince.png", price:600},
       {name:"Dark Knight",hp:260,maxHp:260,dmg:35,range:30,cost:5,speed:3,img:"https://img.icons8.com/color/96/darth-vader.png", price:600},
-      {name:"Healer",hp:150,maxHp:150,dmg:0,range:150,cost:4,speed:2,img:"https://img.icons8.com/color/96/angel.png",      price:400},
-      {name:"Bomber",hp:110,maxHp:110,dmg:45,range:25,cost:3,speed:2,img:"https://img.icons8.com/color/96/bomb.png",       price:300},
+      {name:"Healer",hp:150,maxHp:150,dmg:0,range:150,cost:4,speed:2,img:"https://img.icons8.com/color/96/angel.png", price:400},
+      {name:"Bomber",hp:110,maxHp:110,dmg:45,range:25,cost:3,speed:2,img:"https://img.icons8.com/color/96/bomb.png", price:300},
       {name:"Skeleton Army",hp:50,maxHp:50,dmg:10,range:10,cost:3,speed:4,img:"https://img.icons8.com/color/96/skeleton.png", price:250},
       {name:"Valkyrie",hp:260,maxHp:260,dmg:40,range:25,cost:4,speed:2,img:"https://img.icons8.com/color/96/valkyrie.png", price:450},
-      {name:"Hog Rider",hp:280,maxHp:280,dmg:55,range:20,cost:4,speed:4,img:"https://img.icons8.com/color/96/boar.png",    price:500},
+      {name:"Hog Rider",hp:280,maxHp:280,dmg:55,range:20,cost:4,speed:4,img:"https://img.icons8.com/color/96/boar.png", price:500},
       {name:"Electro Spirit",hp:100,maxHp:100,dmg:20,range:60,cost:2,speed:4,img:"https://img.icons8.com/color/96/lightning-bolt.png", price:250},
       {name:"Baby Dragon",hp:180,maxHp:180,dmg:35,range:80,cost:4,speed:3,img:"https://img.icons8.com/color/96/baby-dragon.png", price:500},
-      {name:"Pekka",hp:700,maxHp:700,dmg:80,range:25,cost:8,speed:1,img:"https://img.icons8.com/color/96/robot.png",       price:800},
-      {name:"Bandit",hp:200,maxHp:200,dmg:40,range:20,cost:4,speed:5,img:"https://img.icons8.com/color/96/ninja.png",      price:500},
-      {name:"Witch",hp:160,maxHp:160,dmg:25,range:180,cost:5,speed:2,img:"https://img.icons8.com/color/96/witch.png",      price:500},
+      {name:"Pekka",hp:700,maxHp:700,dmg:80,range:25,cost:8,speed:1,img:"https://img.icons8.com/color/96/robot.png", price:800},
+      {name:"Bandit",hp:200,maxHp:200,dmg:40,range:20,cost:4,speed:5,img:"https://img.icons8.com/color/96/ninja.png", price:500},
+      {name:"Witch",hp:160,maxHp:160,dmg:25,range:180,cost:5,speed:2,img:"https://img.icons8.com/color/96/witch.png", price:500},
       {name:"Bowler",hp:300,maxHp:300,dmg:35,range:150,cost:6,speed:2,img:"https://img.icons8.com/color/96/bowling-ball.png", price:600},
-      {name:"Hunter",hp:200,maxHp:200,dmg:50,range:100,cost:4,speed:3,img:"https://img.icons8.com/color/96/shotgun.png",   price:500},
+      {name:"Hunter",hp:200,maxHp:200,dmg:50,range:100,cost:4,speed:3,img:"https://img.icons8.com/color/96/shotgun.png", price:500},
       {name:"Mega Minion",hp:140,maxHp:140,dmg:30,range:50,cost:3,speed:3,img:"https://img.icons8.com/color/96/minion.png", price:350}
     ];
 
-    /************ Menu Rendering ************/
-    function renderDeck(ownedMap){
+    // Render deck + shop
+    function renderDeck(owned){
       const deckEl = document.getElementById("deck");
-      deckEl.innerHTML = "";
-      allCards.forEach(card=>{
-        if(!ownedMap || ownedMap[card.name]) {
-          const d = document.createElement("div");
-          d.className = "card";
-          d.innerHTML = `<div class="elixir-cost">${card.cost}</div><img src="${card.img}"><b>${card.name}</b>`;
+      deckEl.innerHTML="";
+      allCards.forEach(c=>{
+        if(!owned || owned[c.name]){
+          const d=document.createElement("div");
+          d.className="card";
+          d.innerHTML=`<div class="elixir-cost">${c.cost}</div><img src="${c.img}"><b>${c.name}</b>`;
           deckEl.appendChild(d);
         }
       });
     }
-
-    function renderShop(ownedMap, coins){
-      const shop = document.getElementById("shop");
-      shop.innerHTML = "";
-      allCards.forEach(card=>{
-        // Skip free starters in shop (already owned by default)
-        const showInShop = card.price > 0;
-        if(!showInShop) return;
-
-        const owned = !!ownedMap[card.name];
+    function renderShop(owned, coins){
+      const shop = document.getElementById("shop"); shop.innerHTML="";
+      allCards.forEach(c=>{
+        if(c.price<=0) return; // skip free starters
+        const ownedFlag = !!owned[c.name];
         const el = document.createElement("div");
-        el.className = "card";
+        el.className="card";
         el.innerHTML = `
-          <div class="elixir-cost">${card.cost}</div>
-          <img src="${card.img}">
-          <b>${card.name}</b>
-          <div class="price-tag">${card.price} 🪙</div>
-          <div class="${owned ? 'owned' : 'buy-btn'}">${owned ? 'Owned' : 'Buy'}</div>
+          <div class="elixir-cost">${c.cost}</div>
+          <img src="${c.img}">
+          <b>${c.name}</b>
+          <div class="price-tag">${c.price} 🪙</div>
+          <div class="${ownedFlag?'owned':'buy-btn'}">${ownedFlag?'Owned':'Buy'}</div>
         `;
-        if(!owned){
-          const btn = el.querySelector(".buy-btn");
-          btn.onclick = async ()=>{
-            const snap = await playerRef.get();
-            const p = snap.val()||{};
-            const currentCoins = p.coins||0;
-            if(currentCoins < card.price) { alert("Not enough coins!"); return; }
-            // Deduct coins & add to ownedCards
-            await playerRef.child("coins").transaction(c=> (c||0) - card.price);
-            await playerRef.child("ownedCards/"+card.name).set(true);
+        if(!ownedFlag){
+          el.querySelector('.buy-btn').onclick = async ()=>{
+            const snap = await playerRef.get(); const p = snap.val()||{};
+            const have = p.coins||0;
+            if(have < c.price){ alert("Not enough coins!"); return; }
+            await playerRef.child("coins").transaction(v => (v||0)-c.price);
+            await playerRef.child("ownedCards/"+c.name).set(true);
           };
         }
         shop.appendChild(el);
       });
     }
-
-    // Keep deck/shop reflecting ownership & coins
-    playerRef.on("value", snap=>{
-      const p = snap.val()||{};
-      const owned = p.ownedCards || {};
-      renderDeck(owned);
-      renderShop(owned, p.coins||0);
+    playerRef.on("value", s=>{
+      const p=s.val()||{}; const owned=p.ownedCards||{};
+      renderDeck(owned); renderShop(owned, p.coins||0);
     });
 
     /************ Elixir ************/
-    let elixir = 0, maxElixir = 10, elixirRegenRate = 2000, lastElixirTime = Date.now();
+    let elixir=0, maxElixir=10, elixirRegenRate=2000, lastElixirTime=Date.now();
     function initElixirBar(){
-      const bar = document.getElementById("elixirBar");
-      bar.innerHTML = "";
-      for(let i=0;i<maxElixir;i++){
-        const seg = document.createElement("div");
-        seg.className = "elixir-segment"; seg.id = "elixir-"+i;
-        bar.appendChild(seg);
-      }
+      const bar=document.getElementById("elixirBar"); bar.innerHTML="";
+      for(let i=0;i<maxElixir;i++){ const seg=document.createElement("div"); seg.className="elixir-segment"; seg.id="elixir-"+i; bar.appendChild(seg); }
     }
     function updateElixir(){
-      const now = Date.now();
-      if(now - lastElixirTime >= elixirRegenRate && elixir < maxElixir){
-        elixir++; lastElixirTime = now;
-      }
-      for(let i=0;i<maxElixir;i++){
-        const seg = document.getElementById("elixir-"+i);
-        if(!seg) continue;
-        seg.classList.toggle("elixir-filled", i < elixir);
-      }
+      const now=Date.now();
+      if(now-lastElixirTime>=elixirRegenRate && elixir<maxElixir){ elixir++; lastElixirTime=now; }
+      for(let i=0;i<maxElixir;i++){ const seg=document.getElementById("elixir-"+i); if(seg) seg.classList.toggle("elixir-filled", i<elixir); }
     }
     setInterval(updateElixir, 200);
 
-    /************ Matchmaking + Rooms ************/
-    let roomId = null, mySide = null, isHost = false, searching=false;
-    let actionsRef = null, roomPlayersRef = null;
+    /************ Matchmaking ************/
+    let roomId=null, mySide=null, searching=false;
+    let actionsRef=null, roomPlayersRef=null;
 
     function findMatch(){
-      document.getElementById("statusText").innerText = "Searching...";
-      document.getElementById("battleBtn").style.display = "none";
-      document.getElementById("cancelBtn").style.display = "inline-block";
-      searching = true;
+      document.getElementById("statusText").innerText="Searching...";
+      document.getElementById("battleBtn").style.display="none";
+      document.getElementById("cancelBtn").style.display="inline-block";
+      searching=true;
 
-      const queueRef = db.ref("queue");
+      const queueRef=db.ref("queue");
       queueRef.once("value").then(snap=>{
-        const q = snap.val();
+        const q=snap.val();
         if(q){
-          // Match with the first in queue
-          const oppId = Object.keys(q)[0];
-          roomId = "room-"+Date.now();
-          isHost = true;
-          mySide = "blue";
-          const roomData = {
+          const oppId=Object.keys(q)[0];
+          roomId="room-"+Date.now();
+          mySide="blue";
+          const roomData={
             createdAt: firebase.database.ServerValue.TIMESTAMP,
-            state: "active",
-            players: {
-              [playerId]: {connected:true, side:"blue", name: playerName},
-              [oppId]:    {connected:true, side:"red"}
+            state:"active",
+            players:{
+              [playerId]:{connected:true,side:"blue",name:playerName},
+              [oppId]:{connected:true,side:"red"}
             }
           };
           db.ref("rooms/"+roomId).set(roomData);
           db.ref("queue/"+oppId).remove();
           startBattle();
-        } else {
-          // Add self to queue and wait to be placed into a room
-          db.ref("queue/"+playerId).set({name: playerName});
+        }else{
+          db.ref("queue/"+playerId).set({name:playerName});
           db.ref("rooms").on("child_added", snap=>{
             if(!searching) return;
-            const r = snap.val();
+            const r=snap.val();
             if(r && r.players && r.players[playerId] && !roomId){
-              roomId = snap.key;
-              mySide = r.players[playerId].side || "red"; // joiner defaults to red
+              roomId=snap.key;
+              mySide=r.players[playerId].side||"red";
               startBattle();
             }
           });
         }
       });
     }
-
     function cancelSearch(){
       searching=false;
       db.ref("queue/"+playerId).remove();
@@ -354,228 +392,223 @@
       document.getElementById("cancelBtn").style.display="none";
     }
 
-    /************ Battle ************/
-    const canvas = document.getElementById("battleCanvas");
-    const ctx = canvas.getContext("2d");
-    let towers = [];
-    let units = [];
-    let selectedCard = null;
-    let placementCircle = null;
-    const cardCooldowns = {}; // cardName -> availableAt ms
+    // Rejoin active room if you refreshed
+    function tryRejoinRoom(){
+      db.ref("rooms").once("value").then(s=>{
+        s.forEach(r=>{
+          const val=r.val();
+          if(val && val.state==="active" && val.players && val.players[playerId]){
+            roomId=r.key; mySide=val.players[playerId].side||"red";
+            startBattle();
+          }
+        });
+      });
+    }
+    playerRef.once("value").then(s=>{
+      const p=s.val()||{};
+      if(p.disconnected){ tryRejoinRoom(); playerRef.update({disconnected:false, online:true}); }
+    });
 
-    // battle UI
-    function renderHand(ownedMap){
-      const bar = document.getElementById("cardBar");
-      bar.innerHTML = "";
-      allCards.forEach(c=>{
-        if(!ownedMap[c.name]) return;
-        const d = document.createElement("div"); d.className = "card";
-        d.innerHTML = `<div class="elixir-cost">${c.cost}</div><img src="${c.img}"><b>${c.name}</b>`;
-        const now = Date.now();
-        const cd = cardCooldowns[c.name] || 0;
-        if(cd > now){ d.classList.add("cooldown"); }
-        d.onclick = ()=>{
-          if(cd > Date.now()) return;
-          selectedCard = c;
+    /************ Battle ************/
+    const canvas=document.getElementById("battleCanvas");
+    const ctx=canvas.getContext("2d");
+    const towerImg=new Image(); towerImg.src="mini-castle.png";
+
+    let towers=[], units=[], selectedCard=null;
+    let placementCircle=null, lastMouse={x:canvas.width/2, y:canvas.height*0.75};
+    const cardCooldowns={}; // name -> timestamp
+
+    // Render owned cards into the battle hand
+    function renderHand(owned){
+      const bar=document.getElementById("cardBar"); bar.innerHTML="";
+      allCards.forEach(card=>{
+        if(!owned[card.name]) return;
+        const d=document.createElement("div"); d.className="card";
+        d.innerHTML=`<div class="elixir-cost">${card.cost}</div><img src="${card.img}"><b>${card.name}</b>`;
+        const now=Date.now(); const cd=cardCooldowns[card.name]||0;
+        if(cd>now) d.classList.add("cooldown");
+        d.onclick=()=>{
+          if((cardCooldowns[card.name]||0) > Date.now()) return;
+          selectedCard=card;
           highlightSelected(d);
+          // show circle immediately at last mouse position, clamped to my half
+          let y=lastMouse.y;
+          if(mySide==="blue" && y<canvas.height/2) y=canvas.height/2;
+          if(mySide==="red"  && y>canvas.height/2) y=canvas.height/2;
+          placementCircle={x:lastMouse.x, y};
         };
         bar.appendChild(d);
       });
     }
-    function highlightSelected(cardEl){
+    function highlightSelected(el){
       document.querySelectorAll("#cardBar .card").forEach(c=>c.classList.remove("selected"));
-      cardEl.classList.add("selected");
+      el.classList.add("selected");
+    }
+    function refreshCooldownStyles(){
+      const now=Date.now();
+      document.querySelectorAll("#cardBar .card").forEach(el=>{
+        const nameEl=el.querySelector("b"); if(!nameEl) return;
+        const nm=nameEl.textContent;
+        el.classList.toggle("cooldown", (cardCooldowns[nm]||0) > now);
+      });
     }
 
-    // Placement circle follows cursor
+    // Placement circle follow
+    function clampToHalf(x,y){
+      if(mySide==="blue" && y<canvas.height/2) y=canvas.height/2;
+      if(mySide==="red"  && y>canvas.height/2) y=canvas.height/2;
+      // soft clamp inside canvas bounds
+      if(x<20) x=20; if(x>canvas.width-20) x=canvas.width-20;
+      if(y<20) y=20; if(y>canvas.height-20) y=canvas.height-20;
+      return {x,y};
+    }
     canvas.addEventListener("mousemove", e=>{
-      if(!selectedCard){ placementCircle = null; return; }
-      const rect = canvas.getBoundingClientRect();
-      let x = e.clientX - rect.left, y = e.clientY - rect.top;
-      // clamp to your half
-      if(mySide==="blue"){ if(y < canvas.height/2) y = canvas.height/2; }
-      else { if(y > canvas.height/2) y = canvas.height/2; }
-      placementCircle = {x,y};
+      const r=canvas.getBoundingClientRect();
+      lastMouse.x = e.clientX - r.left;
+      lastMouse.y = e.clientY - r.top;
+      if(!selectedCard){ placementCircle=null; return; }
+      placementCircle = clampToHalf(lastMouse.x, lastMouse.y);
     });
 
-    // Drop card → push action (cooldown 5s)
+    // Drop card -> push action; 5s cooldown
     canvas.addEventListener("click", e=>{
       if(!selectedCard) return;
-      const now = Date.now();
-      if((cardCooldowns[selectedCard.name]||0) > now) return;
-
-      const rect = canvas.getBoundingClientRect();
-      let x = e.clientX - rect.left, y = e.clientY - rect.top;
-
-      if(mySide === "blue" && y < canvas.height/2) return;
-      if(mySide === "red"  && y > canvas.height/2) return;
-
+      const rect=canvas.getBoundingClientRect();
+      let x=e.clientX-rect.left, y=e.clientY-rect.top;
+      ({x,y}=clampToHalf(x,y));
       if(elixir < selectedCard.cost) return;
 
       elixir -= selectedCard.cost;
-      cardCooldowns[selectedCard.name] = now + 5000; // 5s cooldown
+      cardCooldowns[selectedCard.name]=Date.now()+5000;
       refreshCooldownStyles();
 
-      const action = { player: playerId, card: selectedCard, x, y, timestamp: Date.now() };
+      const action={ player:playerId, card:selectedCard, x, y, timestamp:Date.now() };
       db.ref("rooms/"+roomId+"/actions").push(action);
-      selectedCard = null;
+
+      selectedCard=null; placementCircle=null;
       document.querySelectorAll("#cardBar .card").forEach(c=>c.classList.remove("selected"));
-      placementCircle = null;
     });
 
-    function refreshCooldownStyles(){
-      const now = Date.now();
-      document.querySelectorAll("#cardBar .card").forEach((el, idx)=>{
-        const cName = (function(){
-          // hacky: infer by reading innerText line w/ name (last child <b>)
-          const b = el.querySelector("b"); return b ? b.textContent : "";
-        })();
-        if(!cName) return;
-        const cd = cardCooldowns[cName]||0;
-        el.classList.toggle("cooldown", cd > now);
-      });
-    }
+    function drawArena(){
+      // background field
+      // grass gradient
+      const g=ctx.createLinearGradient(0,0,0,canvas.height);
+      g.addColorStop(0,"#0f2b1f");
+      g.addColorStop(0.5,"#123725");
+      g.addColorStop(1,"#0f2b1f");
+      ctx.fillStyle=g; ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    function startBattle(){
-      searching=false;
-      db.ref("queue/"+playerId).remove();
-
-      // infer mySide if joiner
-      if(!mySide){
-        db.ref("rooms/"+roomId).once("value").then(s=>{ mySide = (s.val().players[playerId].side || "red"); });
+      // center river/bridge vibe
+      ctx.fillStyle="#283c59";
+      ctx.fillRect(0, canvas.height/2-10, canvas.width, 20);
+      // bridge planks
+      ctx.fillStyle="#735c3c";
+      for(let x=0;x<canvas.width;x+=40){
+        ctx.fillRect(x, canvas.height/2-12, 24, 24);
       }
 
-      // screens
-      document.getElementById("menuScreen").style.display="none";
-      document.getElementById("battleScreen").style.display="block";
-      document.getElementById("cardBar").style.display="flex";
-      document.getElementById("elixirBar").style.display="flex";
-      document.getElementById("arenaBackground").style.display="block";
-      document.getElementById("statusText").innerText="In Battle";
+      // lane separators (top/mid/bot)
+      ctx.strokeStyle="rgba(255,255,255,0.15)"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(0, canvas.height/3); ctx.lineTo(canvas.width, canvas.height/3); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, canvas.height*2/3); ctx.lineTo(canvas.width, canvas.height*2/3); ctx.stroke();
 
-      // Elixir+hand
-      elixir = 5; lastElixirTime = Date.now(); initElixirBar();
-
-      // towers
-      towers = [
-        {x:150,y:550,hp:600,side:"blue",king:false},
-        {x:650,y:550,hp:600,side:"blue",king:false},
-        {x:400,y:620,hp:1000,side:"blue",king:true},
-        {x:150,y:150,hp:600,side:"red",king:false},
-        {x:650,y:150,hp:600,side:"red",king:false},
-        {x:400,y:80,hp:1000,side:"red",king:true}
-      ];
-      units = [];
-
-      // mark connected & set onDisconnect for room
-      db.ref("rooms/"+roomId+"/players/"+playerId).update({connected:true, side: mySide, name: playerName});
-      db.ref("rooms/"+roomId+"/players/"+playerId).onDisconnect().update({connected:false, lastSeen: firebase.database.ServerValue.TIMESTAMP});
-
-      // render owned hand
-      playerRef.child("ownedCards").once("value").then(s=>{
-        const owned = s.val()||{};
-        renderHand(owned);
-      });
-
-      // listen for actions
-      actionsRef = db.ref("rooms/"+roomId+"/actions");
-      actionsRef.on("child_added", snap=>{
-        const a = snap.val();
-        const side = (a.player === playerId) ? mySide : (mySide==="blue" ? "red" : "blue");
-        spawnUnit(a.card, side, a.x, a.y);
-      });
-
-      requestAnimationFrame(drawBattle);
-    }
-
-    function leaveRoomAndMaybeDelete(){
-      if(!roomId) return;
-      db.ref("rooms/"+roomId+"/players/"+playerId).update({connected:false});
-      // delete if no connected players (or game ended and no one connected)
-      db.ref("rooms/"+roomId+"/players").once("value").then(s=>{
-        let anyConnected=false;
-        s.forEach(c=>{ if(c.val() && c.val().connected) anyConnected=true; });
-        if(!anyConnected){
-          db.ref("rooms/"+roomId).remove();
-        }
-      });
-    }
-
-    window.addEventListener("beforeunload", ()=>{
-      playerRef.update({ online:false, disconnected:true });
-      leaveRoomAndMaybeDelete();
-    });
-
-    /************ Battle simulation ************/
-    function spawnUnit(card, side, x, y){
-      units.push({
-        name: card.name,
-        hp: card.hp, maxHp: card.maxHp,
-        dmg: card.dmg, range: card.range,
-        speed: card.speed,
-        side, x, y,
-        cooldown: 0,
-        dir: (side==="blue" ? -1 : 1) // blue goes up, red goes down
-      });
+      // spawn halves tint
+      ctx.fillStyle="rgba(0,0,255,0.05)"; ctx.fillRect(0, canvas.height/2, canvas.width, canvas.height/2); // blue half
+      ctx.fillStyle="rgba(255,0,0,0.05)"; ctx.fillRect(0, 0, canvas.width, canvas.height/2);               // red half
     }
 
     function drawTower(t){
-      if(towerImg.complete){
-        ctx.drawImage(towerImg, t.x-25, t.y-25, 50, 50);
-      } else {
-        ctx.fillStyle = t.side==="blue" ? "blue" : "red";
-        ctx.fillRect(t.x-20, t.y-20, 40, 40);
-      }
-      // HP bar
-      ctx.fillStyle="red"; ctx.fillRect(t.x-20, t.y-35, 40, 5);
-      ctx.fillStyle="lime"; const w = Math.max(0, (t.hp/(t.king?1000:600))*40);
-      ctx.fillRect(t.x-20, t.y-35, w, 5);
+      if(towerImg.complete){ ctx.drawImage(towerImg, t.x-25, t.y-25, 50, 50); }
+      else{ ctx.fillStyle=t.side==="blue"?"#5ec8ff":"#ff6b6b"; ctx.fillRect(t.x-20, t.y-20, 40, 40); }
+      // HP bar (king=1000, princess=600)
+      const maxHp = t.king?1000:600;
+      ctx.fillStyle="#900"; ctx.fillRect(t.x-22, t.y-34, 44, 6);
+      ctx.fillStyle="#3f3"; ctx.fillRect(t.x-22, t.y-34, 44*(Math.max(0,t.hp)/maxHp), 6);
+    }
+
+    function spawnUnit(card, side, x, y){
+      units.push({
+        name:card.name, hp:card.hp, maxHp:card.maxHp, dmg:card.dmg, range:card.range, speed:card.speed,
+        side, x, y, cooldown:0, dir:(side==="blue" ? -1 : 1)
+      });
     }
 
     function drawUnit(u){
-      ctx.fillStyle = (u.side==="blue") ? "cyan" : "red";
+      // body
+      ctx.fillStyle = (u.side==="blue") ? "#8de1ff" : "#ff7f7f";
       ctx.beginPath(); ctx.arc(u.x, u.y, 14, 0, Math.PI*2); ctx.fill();
-      // HP bar
-      ctx.fillStyle="red"; ctx.fillRect(u.x-15, u.y-24, 30, 5);
-      ctx.fillStyle="lime"; ctx.fillRect(u.x-15, u.y-24, 30*(u.hp/u.maxHp), 5);
+      // simple legs animation
+      const step = Math.sin(Date.now()/120)*4;
+      ctx.strokeStyle=(u.side==="blue")?"#c7f1ff":"#ffd1d1"; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.moveTo(u.x-8, u.y+14); ctx.lineTo(u.x-8, u.y+20+step); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(u.x+8, u.y+14); ctx.lineTo(u.x+8, u.y+20-step); ctx.stroke();
+      // hp bar
+      ctx.fillStyle="#900"; ctx.fillRect(u.x-15, u.y-24, 30, 5);
+      ctx.fillStyle="#3f3"; ctx.fillRect(u.x-15, u.y-24, 30*(u.hp/u.maxHp), 5);
     }
 
     function updateUnits(){
+      // move & fight towers (simple)
       units.forEach(u=>{
-        // move
         u.y += u.dir * u.speed;
-
-        // cooldown tick
         if(u.cooldown>0) u.cooldown--;
 
-        // attack towers in range
         for(const t of towers){
-          if(t.side === u.side) continue;
-          const dx = Math.abs(u.x - t.x), dy = Math.abs(u.y - t.y);
-          if(dx < 30 && dy < 30){
+          if(t.side===u.side) continue;
+          const dx=Math.abs(u.x - t.x), dy=Math.abs(u.y - t.y);
+          if(dx<30 && dy<30){
             if(u.cooldown<=0){
               t.hp -= u.dmg;
-              u.cooldown = 30; // every ~0.5s at 60fps-ish
+              u.cooldown = 30; // ~0.5s
             }
           }
         }
       });
-
-      // remove dead units
       units = units.filter(u=>u.hp>0);
     }
 
-    let gameOver = false;
-    function drawBattle(){
-      // clear
-      ctx.clearRect(0,0,canvas.width,canvas.height);
+    function endGame(winnerColor){
+      if(gameOver) return; gameOver=true;
+      db.ref("rooms/"+roomId+"/state").set("ended");
+      db.ref("rooms/"+roomId+"/winner").set(winnerColor);
 
-      // towers, end condition
+      const iWon = (winnerColor==="Blue" && mySide==="blue") || (winnerColor==="Red" && mySide==="red");
+      if(iWon){
+        playerRef.child("coins").transaction(c=>(c||0)+100);
+        playerRef.child("trophies").transaction(t=>(t||0)+5);
+      }
+
+      document.getElementById("resultText").innerText = iWon ? "🏆 Victory!" : "❌ Defeat";
+      document.getElementById("rewardText").innerText = iWon ? "+100 Coins, +5 Trophies" : "Better luck next time!";
+      document.getElementById("resultScreen").style.display="block";
+    }
+
+    function leaveRoomAndMaybeDelete(){
+      if(!roomId) return;
+      const myRef = db.ref("rooms/"+roomId+"/players/"+playerId);
+      myRef.update({connected:false, lastSeen: firebase.database.ServerValue.TIMESTAMP});
+      db.ref("rooms/"+roomId+"/players").once("value").then(s=>{
+        let any=false; s.forEach(p=>{ if(p.val() && p.val().connected) any=true; });
+        if(!any){ db.ref("rooms/"+roomId).remove(); }
+      });
+    }
+
+    window.addEventListener("beforeunload", ()=>{
+      playerRef.update({online:false, disconnected:true});
+      leaveRoomAndMaybeDelete();
+    });
+
+    let gameOver=false;
+    function drawLoop(){
+      // arena background
+      drawArena();
+
+      // towers
       towers.forEach(t=>{
         drawTower(t);
         if(!gameOver && t.hp<=0 && t.king){
-          const winnerColor = (t.side === "blue") ? "Red" : "Blue";
-          endGame(winnerColor);
+          const winner = (t.side==="blue") ? "Red" : "Blue";
+          endGame(winner);
         }
       });
 
@@ -585,67 +618,78 @@
 
       // placement circle
       if(placementCircle && selectedCard){
-        ctx.strokeStyle="white"; ctx.lineWidth=2;
-        ctx.beginPath(); ctx.arc(placementCircle.x, placementCircle.y, 24, 0, Math.PI*2); ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(placementCircle.x, placementCircle.y, 24, 0, Math.PI*2);
+        ctx.strokeStyle="#fff"; ctx.lineWidth=2; ctx.stroke();
       }
 
-      if(!gameOver) requestAnimationFrame(drawBattle);
+      if(!gameOver) requestAnimationFrame(drawLoop);
     }
 
-    function awardWinToSelfIfNeeded(winnerColor){
-      const iWon = (winnerColor==="Blue" && mySide==="blue") || (winnerColor==="Red" && mySide==="red");
-      if(!iWon) return;
-      // +100 coins, +5 trophies (transaction-safe)
-      playerRef.child("coins").transaction(c => (c||0)+100);
-      playerRef.child("trophies").transaction(t => (t||0)+5);
-    }
+    function startBattle(){
+      searching=false; db.ref("queue/"+playerId).remove();
 
-    function endGame(winnerColor){
-      if(gameOver) return;
-      gameOver = true;
+      // show battle UI
+      document.getElementById("menuScreen").style.display="none";
+      document.getElementById("battleScreen").style.display="block";
+      document.getElementById("cardBar").style.display="flex";
+      document.getElementById("elixirBar").style.display="flex";
+      document.getElementById("statusText").innerText="In Battle";
 
-      // mark room ended (do not delete immediately, let both see banner)
-      db.ref("rooms/"+roomId+"/state").set("ended");
-      db.ref("rooms/"+roomId+"/winner").set(winnerColor);
+      // init elixir & bar
+      elixir=5; lastElixirTime=Date.now(); initElixirBar();
 
-      awardWinToSelfIfNeeded(winnerColor);
+      // towers setup (vertical)
+      towers=[
+        {x:150,y:550,hp:600,side:"blue",king:false},
+        {x:650,y:550,hp:600,side:"blue",king:false},
+        {x:400,y:620,hp:1000,side:"blue",king:true},
+        {x:150,y:150,hp:600,side:"red",king:false},
+        {x:650,y:150,hp:600,side:"red",king:false},
+        {x:400,y:80,hp:1000,side:"red",king:true}
+      ];
+      units=[]; gameOver=false; selectedCard=null; placementCircle=null;
 
-      // UI banner
-      document.getElementById("resultText").innerText =
-        ( (winnerColor==="Blue" && mySide==="blue") || (winnerColor==="Red" && mySide==="red") )
-          ? "🏆 Victory!" : "❌ Defeat";
-      document.getElementById("rewardText").innerText =
-        ( (winnerColor==="Blue" && mySide==="blue") || (winnerColor==="Red" && mySide==="red") )
-          ? "+100 Coins, +5 Trophies" : "Better luck next time!";
+      // mark presence in room
+      db.ref("rooms/"+roomId+"/players/"+playerId).update({connected:true, side:mySide, name:playerName});
+      db.ref("rooms/"+roomId+"/players/"+playerId).onDisconnect().update({connected:false, lastSeen: firebase.database.ServerValue.TIMESTAMP});
 
-      document.getElementById("resultScreen").style.display="block";
+      // load owned & render hand
+      playerRef.child("ownedCards").once("value").then(s=>{
+        renderHand(s.val()||{});
+      });
+
+      // actions listener
+      if(actionsRef) actionsRef.off();
+      actionsRef = db.ref("rooms/"+roomId+"/actions");
+      actionsRef.on("child_added", snap=>{
+        const a=snap.val();
+        const side = (a.player===playerId) ? mySide : (mySide==="blue"?"red":"blue");
+        spawnUnit(a.card, side, a.x, a.y);
+      });
+
+      requestAnimationFrame(drawLoop);
     }
 
     function returnToMenu(){
       document.getElementById("resultScreen").style.display="none";
       document.getElementById("battleScreen").style.display="none";
       document.getElementById("menuScreen").style.display="block";
-      document.getElementById("arenaBackground").style.display="none";
       document.getElementById("cardBar").style.display="none";
       document.getElementById("elixirBar").style.display="none";
       document.getElementById("statusText").innerText="Idle";
 
-      // detach listeners
       if(actionsRef) actionsRef.off();
       if(roomPlayersRef) roomPlayersRef.off();
 
-      // leave & maybe delete room
       leaveRoomAndMaybeDelete();
 
-      // reset battle state
-      placementCircle = null;
-      selectedCard = null;
-      gameOver = false;
-      roomId = null; mySide = null; isHost = false;
+      placementCircle=null; selectedCard=null; gameOver=false;
+      roomId=null; mySide=null; searching=false;
     }
 
-    /************ Simple Menu Buttons for Demo ************/
-    // (Battle button hooks into real matchmaking above)
+    /************ Menu Buttons ************/
+    // Exposed handlers are already wired on buttons; all logic stays here.
   </script>
 </body>
 </html>
