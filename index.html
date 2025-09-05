@@ -223,7 +223,7 @@
       #manualPanel{ bottom: 140px; }
     }
 
-    /* === STARTING SPLASH (Click to Play) — ADDED === */
+    /* === STARTING SPLASH (Click to Play) === */
     #startOverlay{
       position: fixed;
       inset: 0;
@@ -262,7 +262,10 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
 </head>
 <body>
-  <!-- STARTING SPLASH (Click to Play) — ADDED -->
+  <!-- Background music (loop) — ADDED -->
+  <audio id="bgm" src="mixkit-the-boss-479.mp3" loop preload="auto" playsinline></audio>
+
+  <!-- STARTING SPLASH (Click to Play) -->
   <div id="startOverlay" title="Click to Play">
     <div class="startText">Click to Play</div>
   </div>
@@ -436,7 +439,7 @@
       <button id="changelogClose" aria-label="Close changelog">×</button>
       <h3 id="changelogTitle">What’s new in Flash Royale</h3>
       <ul id="changelogList">
-        <li>Welcome to Flash-Royale! Scripted and brought to you by Chace.</li>
+        <li>Host-authoritative netcode: both players see the same placements &amp; damage.</li>
         <li>Units cross bridges, then target enemy towers, stopping to attack in range.</li>
         <li>Tower AI that shoots back; health bars on towers &amp; units.</li>
         <li>Strict 1v1 matchmaking with multiple simultaneous rooms.</li>
@@ -849,8 +852,8 @@
       ctx.beginPath(); ctx.moveTo(0, canvas.height*2/3); ctx.lineTo(canvas.width, canvas.height*2/3); ctx.stroke();
 
       ctx.fillStyle="rgba(0,0,255,0.05)"; ctx.fillRect(0, canvas.height/2, canvas.width, canvas.height/2);
-      ctx.fillStyle="rgba(255,0,0,0.05)"; ctx.fillRect(0, 0, canvas.height/2, canvas.height/2); /* legacy line left untouched */
-      ctx.fillStyle="rgba(255,0,0,0.05)"; ctx.fillRect(0, 0, canvas.width, canvas.height/2); /* corrected fill to ensure red half shows */
+      ctx.fillStyle="rgba(255,0,0,0.05)"; ctx.fillRect(0, 0, canvas.height/2, canvas.height/2);
+      ctx.fillStyle="rgba(255,0,0,0.05)"; ctx.fillRect(0, 0, canvas.width, canvas.height/2);
     }
 
     function drawTower(t){
@@ -1308,21 +1311,39 @@
     })();
   </script>
 
-  <!-- STARTING SPLASH logic — ADDED -->
+  <!-- STARTING SPLASH logic + BGM start -->
   <script>
     (function(){
       const overlay = document.getElementById('startOverlay');
-      if(!overlay) return;
-      // Show immediately (CSS default). Hide on any click.
-      const hide = (e)=>{
-        e && (e.preventDefault(), e.stopPropagation());
-        overlay.style.transition = 'opacity 300ms ease';
-        overlay.style.opacity = '0';
-        setTimeout(()=>{ overlay.style.display='none'; }, 320);
-        // remove handler to avoid any accidental double calls
-        overlay.removeEventListener('click', hide);
-      };
-      overlay.addEventListener('click', hide);
+      const bgm = document.getElementById('bgm');
+
+      function tryPlayBgm(){
+        if(!bgm) return;
+        bgm.play().catch(function(){
+          // If still blocked, play on next user interaction
+          const kick = function(){
+            bgm.play().catch(()=>{}); // best effort
+            document.removeEventListener('click', kick);
+            document.removeEventListener('keydown', kick);
+            document.removeEventListener('touchstart', kick);
+          };
+          document.addEventListener('click', kick, {once:true});
+          document.addEventListener('keydown', kick, {once:true});
+          document.addEventListener('touchstart', kick, {once:true});
+        });
+      }
+
+      if(overlay){
+        const hide = function(e){
+          if(e){ e.preventDefault(); e.stopPropagation(); }
+          overlay.style.transition = 'opacity 300ms ease';
+          overlay.style.opacity = '0';
+          setTimeout(()=>{ overlay.style.display='none'; }, 320);
+          overlay.removeEventListener('click', hide);
+          tryPlayBgm(); // start music after user gesture
+        };
+        overlay.addEventListener('click', hide);
+      }
     })();
   </script>
 </body>
