@@ -83,7 +83,7 @@
       margin-top:30px; padding:15px 40px; font-size:20px; border:none; border-radius:12px; cursor:pointer; background:gold; color:#000;
     }
 
-    /* --- CHANGELOG MODAL (added, does not touch game code) --- */
+    /* --- CHANGELOG MODAL (existing addition) --- */
     #changelogOverlay{
       position:fixed; inset:0; background:rgba(0,0,0,0.65);
       display:none; align-items:center; justify-content:center; z-index:20;
@@ -106,6 +106,23 @@
     }
     #changelogClose:hover{ background:#374151; }
     #changelogHint{ opacity:0.7; font-size:12px; }
+
+    /* --- LEADERBOARD (NEW) --- */
+    .leaderboard{
+      max-width:540px; margin:20px auto; text-align:left;
+      background:rgba(17,24,39,0.75);
+      border:2px solid #334155; border-radius:16px;
+      box-shadow:0 8px 24px rgba(0,0,0,0.35);
+      overflow:hidden;
+    }
+    .leaderboard h3{
+      margin:0; padding:12px 16px; background:#0f172a; border-bottom:2px solid #334155; font-size:18px;
+    }
+    .lb-row{ display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.07); }
+    .lb-row:nth-child(odd){ background:rgba(255,255,255,0.02); }
+    .lb-rank{ width:36px; text-align:center; font-weight:bold; }
+    .lb-name{ flex:1; padding:0 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .lb-trophies{ min-width:90px; text-align:right; font-weight:bold; }
   </style>
 
   <!-- Firebase compat SDKs -->
@@ -176,6 +193,14 @@
 
     <h2>Shop</h2>
     <div class="shop" id="shop"></div>
+
+    <!-- GLOBAL LEADERBOARD (NEW; menu-only because it's inside #menuScreen) -->
+    <div class="leaderboard" id="leaderboard">
+      <h3>🌍 Global Leaderboard (Trophies)</h3>
+      <div id="leaderboardRows">
+        <!-- filled by JS -->
+      </div>
+    </div>
   </div>
 
   <!-- BATTLE -->
@@ -194,20 +219,20 @@
     <button onclick="returnToMenu()">OK</button>
   </div>
 
-  <!-- CHANGELOG MODAL (added) -->
+  <!-- CHANGELOG MODAL (existing addition) -->
   <div id="changelogOverlay" role="dialog" aria-modal="true" aria-labelledby="changelogTitle">
     <div id="changelogModal">
       <button id="changelogClose" aria-label="Close changelog">×</button>
       <h3 id="changelogTitle">What’s new in Flash Royale</h3>
       <ul id="changelogList">
-        <li>Host-authoritative netcode: both players see the same placements & damage.</li>
+        <li>Host-authoritative netcode: both players see the same placements &amp; damage.</li>
         <li>Units cross bridges, then target enemy towers, stopping to attack in range.</li>
-        <li>Tower AI that shoots back; health bars on towers & units.</li>
+        <li>Tower AI that shoots back; health bars on towers &amp; units.</li>
         <li>Strict 1v1 matchmaking with multiple simultaneous rooms.</li>
         <li>Elixir bar (10 segments, +1 per 2s), 5s card cooldown after use.</li>
-        <li>Shop with 24 characters; safe coin deductions; +100 coins & +5 trophies on win.</li>
+        <li>Shop with 24 characters; safe coin deductions; +100 coins &amp; +5 trophies on win.</li>
         <li>Rejoin after refresh; rooms auto-clean when both players leave.</li>
-        <li>All scripted and brought to you by Chace.</li>
+        <li>Player names shown by king castles; placement only on your half.</li>
       </ul>
       <div id="changelogHint">Click × to close</div>
     </div>
@@ -932,9 +957,41 @@
       roomId=null; mySide=null; searching=false; battleReady=false;
       queueAdded=false; isHost=false; hostId=null;
     }
+
+    /************ Leaderboard (NEW) ************/
+    function renderLeaderboard(rows){
+      const container = document.getElementById('leaderboardRows');
+      if(!container) return;
+      container.innerHTML = '';
+      rows.forEach((r, idx)=>{
+        const div = document.createElement('div');
+        div.className = 'lb-row';
+        div.innerHTML = `
+          <div class="lb-rank">${idx+1}</div>
+          <div class="lb-name">${r.name || 'Anon'}</div>
+          <div class="lb-trophies">🏆 ${r.trophies || 0}</div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function subscribeLeaderboard(){
+      // Top 20 by trophies; we reverse to show highest first
+      db.ref('players').orderByChild('trophies').limitToLast(20).on('value', snap=>{
+        const arr=[];
+        snap.forEach(ch=>{
+          const v = ch.val() || {};
+          arr.push({ name: v.name || 'Anon', trophies: v.trophies || 0 });
+        });
+        arr.sort((a,b)=> b.trophies - a.trophies);
+        renderLeaderboard(arr);
+      });
+    }
+    // Start the subscription once we’re online
+    subscribeLeaderboard();
   </script>
 
-  <!-- CHANGELOG SCRIPT (added, self-contained) -->
+  <!-- CHANGELOG SCRIPT (existing addition) -->
   <script>
     (function(){
       function showChangelog(){
