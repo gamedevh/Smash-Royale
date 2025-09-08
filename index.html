@@ -9,7 +9,7 @@
     function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-61B7P6WEL0');
   </script>
   <meta charset="UTF-8" />
-  <title>Flash Royale</title>
+  <title>Flash Royale — Clean Room GC</title>
   <style>
     :root{ --hud-bg: rgba(10,15,30,0.70); --hud-border:#1e3d59; }
     body{ margin:0; font-family:Arial, sans-serif; color:#fff; user-select:none; overflow:hidden; background:#0b0f1c; }
@@ -232,8 +232,8 @@
       </div>
       <div class="section"><strong>Reconnect & Cleanup</strong>
         <ul>
-          <li>Rejoin your active room on refresh. Rooms auto-delete when empty or after end.</li>
-          <li>Leaderboard shows top 20 by trophies.</li>
+          <li>Rejoin your active room on refresh if the opponent is still connected.</li>
+          <li>Empty/ended rooms are automatically cleaned before matchmaking.</li>
         </ul>
       </div>
     </aside>
@@ -265,13 +265,9 @@
       <button id="changelogClose" aria-label="Close changelog">×</button>
       <h3 id="changelogTitle">What’s new in Flash Royale</h3>
       <ul id="changelogList">
-        <li>Scripted and brought to you by Chace, enjoy!</li>
-        <li><b>NEW:</b> Character Levels (max 15) with stat scaling and upgrades in the Deck.</li>
-        <li><b>NEW:</b> Pockets — destroy a side tower to place units on that enemy lane.</li>
-        <li><b>NEW:</b> Real in-battle avatars for units (uses card sprites).</li>
-        <li><b>FIX:</b> Draw loop stops on exit; cooldown visuals auto-refresh; room race guard.</li>
-        <li><b>FIX:</b> Rooms listener cleanup; red overlay bug fixed; action payload hardened.</li>
-        <li>Tower AI nerfed (less damage/range). Tracer sync for non-host visuals.</li>
+        <li>Room Garbage Collector: empty/ended rooms auto-removed on load & before matchmaking.</li>
+        <li>Rejoin only if someone is still connected; otherwise the room is deleted.</li>
+        <li>Character Levels (max 15), Pockets, Tower nerf, unit sprites, and stability fixes remain.</li>
       </ul>
       <div id="changelogHint">Click × to close</div>
     </div>
@@ -294,8 +290,27 @@
     let authUid = null;
     try{ firebase.auth().signInAnonymously().then(res=>{authUid = res.user ? res.user.uid : null;}).catch(()=>{}); }catch(e){}
 
+    /************ Util: Room Garbage Collector ************/
+    async function garbageCollectRooms(){
+      try{
+        const snap = await db.ref('rooms').once('value');
+        snap.forEach(child=>{
+          const r = child.val() || {};
+          const players = r.players || {};
+          let anyConnected = false;
+          Object.keys(players).forEach(pid=>{
+            if(players[pid] && players[pid].connected) anyConnected = true;
+          });
+          const stale = !anyConnected || r.state !== 'active' || !!r.winner;
+          if(stale){
+            db.ref('rooms/'+child.key).remove();
+          }
+        });
+      }catch(e){ /* noop */ }
+    }
+
     /************ Name Filter ************/
-    function normalizeForFilter(s){ if(!s) return ""; s=(""+s).toLowerCase(); const map={'0':'o','1':'i','!':'i','3':'e','4':'a','@':'a','$':'s','5':'s','7':'t','8':'b','9':'g'}; s=s.replace(/[0!134@5$789]/g,ch=>map[ch]||ch); s=s.replace(/[^a-z0-9]/g,""); s=s.replace(/([a-z0-9])\1{1,}/g,"$1$1"); return s; }
+    function normalizeForFilter(s){ if(!s) return ""; s=(""+s).toLowerCase(); const map={'0':'o','1':'i','!':'i','3':'e','4':'a','@':'a','$':'s','5':'s','7':'t','8':'b','9':'g'}; s=s.replace(/[0!134@5$789]/g,ch=>map[ch]||ch); s=s.replace(/[^a-z0-9]/g,""); s=s.replace(/([a-z0-9])\\1{1,}/g,"$1$1"); return s; }
     const bannedB64=["ZnVjaw==","c2hpdA==","Yml0Y2g=","Y3VudA==","ZGljaw==","cHVzc3k=","YXNz","YXNzaG9sZQ==","YmFzdGFyZA==","ZGFtbg==","c3Vja2Vy","c2x1dA==","Z2F5","bmF6aQ==","Y3JhcA==","YmVhbg==","cmlt","a2lsbA=="]; const bannedWords=bannedB64.map(b=>atob(b));
     function containsBannedWord(name){ const n=normalizeForFilter(name); if(!n) return false; for(const w of bannedWords){ if(n.includes(w)) return true; } return false; }
     function sanitizeNameBasic(s){ return (s||"").replace(/[^a-zA-Z0-9]/g,"").substring(0,6); }
@@ -317,7 +332,6 @@
       } else {
         const p=snap.val()||{}; const updates={ name:playerName, online:true, disconnected:false, authUid: authUid||p.authUid||null };
         if(p.coins===undefined || p.coins===null) updates.coins = 400;
-        // ensure starter levels exist
         if(!p.levels){ updates.levels = {"Knight":1,"Archer":1,"Golem":1,"Dragon":1}; }
         playerRef.update(updates);
       }
@@ -326,7 +340,7 @@
     // HUD sync
     playerRef.on("value", s=>{ const p=s.val()||{}; document.getElementById("coinCount").innerText = p.coins||0; document.getElementById("trophies").innerText = p.trophies||0; });
 
-    // Online count (only count online=true)
+    // Online count
     db.ref("players").orderByChild("online").equalTo(true).on("value", snap=>{ let online=0; snap.forEach(()=>online++); document.getElementById("onlineCount").innerText = "Online: "+online; });
 
     // Presence flags
@@ -371,18 +385,28 @@
     function levelOf(name){ return Math.max(1, Math.min(15, (currentLevels && currentLevels[name]) || 1)); }
     function upgradeCost(level){ return 150 * level; } // cost to go from L -> L+1
 
+    function calcLevelStats(card, level){
+      const L = Math.max(1, Math.min(15, level||1));
+      const hp = Math.round(card.hp * (1 + 0.07*(L-1))); // +7% / level
+      const dmg = Math.round(card.dmg * (1 + 0.06*(L-1))); // +6% / level
+      const speed = Math.max(0.35, (card.speed * 0.30) * (1 + 0.02*(L-1))); // slowFactor 0.30 baseline, +2%/level
+      const range = Math.round((card.range||25) + Math.floor((L-1)/2)); // +1 every 2 levels
+      return {hp, dmg, speed, range};
+    }
+
     function renderDeck(owned){
       const deckEl=document.getElementById("deck"); deckEl.innerHTML="";
       allCards.forEach(c=>{
         if(!owned || owned[c.name]){
           const L = levelOf(c.name);
+          const stats = calcLevelStats(c,L);
           const d=document.createElement("div"); d.className="card"; d.style.cursor='default';
           d.innerHTML = `
             <div class="elixir-cost">${c.cost}</div>
             <div class="level-badge">Lv ${L}</div>
             <img src="${c.img}">
             <b>${c.name}</b>
-            <div style="margin-top:4px; font-size:11px; opacity:.85">HP/Dmg/Spd: ${calcLevelStats(c,L).hp}/${calcLevelStats(c,L).dmg}/${calcLevelStats(c,L).speed.toFixed(2)}</div>
+            <div style="margin-top:4px; font-size:11px; opacity:.85">HP/Dmg/Spd: ${stats.hp}/${stats.dmg}/${stats.speed.toFixed(2)}</div>
             <button class="upgrade-btn" ${L>=15?"disabled":""} data-name="${c.name}">Upgrade (${L<15?upgradeCost(L):"Max"})</button>
           `;
           const btn=d.querySelector('.upgrade-btn');
@@ -441,11 +465,14 @@
     let roomRef=null, actionsRef=null, stateRef=null, roomPlayersRef=null, queueAdded=false, pairInterval=null;
     let roomsChildAddedHandler=null, roomsRef = db.ref("rooms");
 
-    function findMatch(){
+    async function findMatch(){
       document.getElementById("statusText").innerText="Searching...";
       document.getElementById("battleBtn").style.display="none";
       document.getElementById("cancelBtn").style.display="inline-block";
       searching=true;
+
+      // GC stale rooms (prevents rejoin-to-empty)
+      garbageCollectRooms();
 
       const myQueueRef = db.ref("queue/"+playerId);
       if(!queueAdded){ myQueueRef.set({ name:playerName, ts:firebase.database.ServerValue.TIMESTAMP, searching:true }); myQueueRef.onDisconnect().remove(); queueAdded=true; }
@@ -455,8 +482,16 @@
 
       if(!roomsChildAddedHandler){
         roomsChildAddedHandler = snap=>{
-          if(!searching || roomId) return; const r=snap.val();
-          if(r && r.players && r.players[playerId]){ roomId=snap.key; mySide = r.players[playerId].side || "red"; startBattle(); }
+          if(!searching || roomId) return; const r=snap.val()||{};
+          if(r && r.players && r.players[playerId]){
+            // If no one connected → delete stale room and continue searching
+            const players=r.players||{}; let anyConnected=false; Object.values(players).forEach(v=>{ if(v && v.connected) anyConnected=true; });
+            if(!anyConnected){ db.ref('rooms/'+snap.key).remove(); return; }
+            // Otherwise, rejoin valid active room
+            if(r.state==='active'){
+              roomId=snap.key; mySide = players[playerId].side || "red"; startBattle();
+            }
+          }
         };
         roomsRef.on("child_added", roomsChildAddedHandler);
       }
@@ -469,11 +504,7 @@
         if(!cand) return;
         db.ref("queue/"+cand+"/claimed").transaction(val=>{ if(val) return; return playerId; }, async (err, committed, snap2)=>{
           if(err || !committed || snap2.val()!==playerId){ return; }
-          // Tie-breaker: only the lexicographically smaller id creates the room
-          if(playerId > cand){ // release claim and let other side create
-            db.ref("queue/"+cand+"/claimed").remove();
-            return;
-          }
+          if(playerId > cand){ db.ref("queue/"+cand+"/claimed").remove(); return; } // tie-breaker
           const oppNameSnap = await db.ref("players/"+cand+"/name").once("value");
           const oppName = oppNameSnap.val() || "Opponent";
           roomId = "room-"+Date.now()+"-"+Math.floor(Math.random()*1000);
@@ -493,8 +524,23 @@
       if(roomsChildAddedHandler){ roomsRef.off("child_added", roomsChildAddedHandler); roomsChildAddedHandler=null; }
     }
 
-    function tryRejoinRoom(){ db.ref("rooms").once("value").then(s=>{ s.forEach(r=>{ const val=r.val(); if(val && val.state==="active" && val.players && val.players[playerId]){ roomId=r.key; mySide=val.players[playerId].side||"red"; startBattle(); } }); }); }
+    function tryRejoinRoom(){
+      db.ref("rooms").once("value").then(s=>{
+        s.forEach(r=>{
+          const val=r.val()||{};
+          if(val && val.players && val.players[playerId]){
+            const players=val.players||{}; let anyConnected=false; Object.values(players).forEach(v=>{ if(v && v.connected) anyConnected=true; });
+            if(!anyConnected){ db.ref('rooms/'+r.key).remove(); return; }
+            if(val.state==="active"){
+              roomId=r.key; mySide=players[playerId].side||"red"; startBattle();
+            }
+          }
+        });
+      });
+    }
     playerRef.once("value").then(s=>{ const p=s.val()||{}; if(p.disconnected){ tryRejoinRoom(); playerRef.update({disconnected:false, online:true}); } });
+    // Also GC on load
+    garbageCollectRooms();
 
     /************ Battle ************/
     const canvas=document.getElementById("battleCanvas"); const ctx=canvas.getContext("2d");
@@ -509,7 +555,7 @@
     // State
     let towers=[], units=[], selectedCard=null; let placementCircle=null, lastMouse={x:canvas.width/2, y:canvas.height*0.75};
     const cardCooldowns={}; let projectiles=[]; let gameOver=false; let nameBlue="Blue", nameRed="Red"; let pendingActionKeys=new Set();
-    let lastPublishTime=0, PUBLISH_MS=150; let roomCleanupArmed=true; let latestClientState=null; // for non-host rendering
+    let lastPublishTime=0, PUBLISH_MS=150; let roomCleanupArmed=true; let latestClientState=null;
 
     // Cache of opponent levels for host to apply correct stats
     const playerLevelsCache = {}; // playerId -> {cardName: level}
@@ -519,8 +565,7 @@
       const bar=document.getElementById("cardBar"); bar.innerHTML="";
       allCards.forEach(card=>{
         if(!owned[card.name]) return; const d=document.createElement("div"); d.className="card";
-        const L = levelOf(card.name); const stats = calcLevelStats(card, L);
-        d.innerHTML=`<div class="elixir-cost">${card.cost}</div><div class="level-badge">Lv ${L}</div><img src="${card.img}"><b>${card.name}</b>`;
+        const L = levelOf(card.name); d.innerHTML=`<div class="elixir-cost">${card.cost}</div><div class="level-badge">Lv ${L}</div><img src="${card.img}"><b>${card.name}</b>`;
         const now=Date.now(); const cd=cardCooldowns[card.name]||0; if(cd>now) d.classList.add("cooldown");
         d.onclick=()=>{ if((cardCooldowns[card.name]||0) > Date.now()) return; selectedCard=card; document.querySelectorAll("#cardBar .card").forEach(c=>c.classList.remove("selected")); d.classList.add("selected"); let y=lastMouse.y; let x=lastMouse.x; ({x,y}=clampToAllowedArea(x,y)); placementCircle={x,y}; };
         bar.appendChild(d);
@@ -529,36 +574,18 @@
     function refreshCooldownStyles(){ const now=Date.now(); document.querySelectorAll("#cardBar .card").forEach(el=>{ const nameEl=el.querySelector("b"); if(!nameEl) return; const nm=nameEl.textContent; el.classList.toggle("cooldown", (cardCooldowns[nm]||0) > now); }); }
     setInterval(refreshCooldownStyles, 200);
 
-    function calcLevelStats(card, level){
-      const L = Math.max(1, Math.min(15, level||1));
-      const hp = Math.round(card.hp * (1 + 0.07*(L-1))); // +7% / level
-      const dmg = Math.round(card.dmg * (1 + 0.06*(L-1))); // +6% / level
-      const speed = Math.max(0.35, (card.speed * 0.30) * (1 + 0.02*(L-1))); // base slowFactor 0.30, +2%/level
-      const range = Math.round((card.range||25) + Math.floor((L-1)/2)); // +1 every 2 levels
-      return {hp, dmg, speed, range};
-    }
-
     function clampToAllowedArea(x,y){
-      // global bounds
       if(x<20) x=20; if(x>canvas.width-20) x=canvas.width-20; if(y<20) y=20; if(y>canvas.height-20) y=canvas.height-20;
-      // own half always allowed
-      const topHalf = y < canvas.height/2; const onBlue = mySide==="blue";
-      const ownHalf = onBlue ? !topHalf : topHalf; if(ownHalf) return {x,y};
-      // enemy half -> pockets check
-      const laneLeft = x < canvas.width/2; const pocketOK = isPocketOpenForLane(laneLeft);
-      if(pocketOK) return {x,y};
-      // not allowed → snap back to border of own half
-      y = onBlue ? (canvas.height/2 + 6) : (canvas.height/2 - 6);
-      return {x,y};
+      const topHalf = y < canvas.height/2; const onBlue = mySide==="blue"; const ownHalf = onBlue ? !topHalf : topHalf; if(ownHalf) return {x,y};
+      const laneLeft = x < canvas.width/2; const pocketOK = isPocketOpenForLane(laneLeft); if(pocketOK) return {x,y};
+      y = onBlue ? (canvas.height/2 + 6) : (canvas.height/2 - 6); return {x,y};
     }
-
     function canPlaceAt(x,y){ const topHalf = y < canvas.height/2; const onBlue = mySide==="blue"; const ownHalf = onBlue ? !topHalf : topHalf; if(ownHalf) return true; const laneLeft = x < canvas.width/2; return isPocketOpenForLane(laneLeft); }
 
     function isPocketOpenForLane(isLeftLane){
-      // Find enemy side side-tower for lane and check hp<=0
       if(!towers || !towers.length) return false; const enemySide = (mySide==="blue")?"red":"blue";
       const candidates = towers.filter(t=>t.side===enemySide && !t.king);
-      if(!candidates.length) return false; // shouldn't happen
+      if(!candidates.length) return false;
       const leftTower = candidates.reduce((acc,t)=> (t.x < canvas.width/2 && (!acc||t.x<acc.x))?t:acc, null);
       const rightTower = candidates.reduce((acc,t)=> (t.x > canvas.width/2 && (!acc||t.x>acc.x))?t:acc, null);
       const target = isLeftLane ? leftTower : rightTower;
@@ -567,7 +594,7 @@
 
     canvas.addEventListener("mousemove", e=>{ const r=canvas.getBoundingClientRect(); lastMouse.x = e.clientX - r.left; lastMouse.y = e.clientY - r.top; if(!selectedCard){ placementCircle=null; return; } const p=clampToAllowedArea(lastMouse.x,lastMouse.y); placementCircle = {x:p.x, y:p.y}; });
 
-    // Drop card → push action (cardName only)
+    // Drop card → push action
     canvas.addEventListener("click", e=>{
       if(!battleReady || !selectedCard) return; const rect=canvas.getBoundingClientRect(); let x=e.clientX-rect.left, y=e.clientY-rect.top; ({x,y}=clampToAllowedArea(x,y)); if(!canPlaceAt(x,y)) return; if(elixir < selectedCard.cost) return; elixir -= selectedCard.cost; cardCooldowns[selectedCard.name]=Date.now()+5000; refreshCooldownStyles();
       db.ref("rooms/"+roomId+"/actions").push({ player:playerId, cardName:selectedCard.name, x, y, timestamp:Date.now() });
@@ -576,27 +603,15 @@
 
     /* Drawing helpers */
     function drawArena(){
-      // ground gradient
       const g=ctx.createLinearGradient(0,0,0,canvas.height); g.addColorStop(0,"#0f2b1f"); g.addColorStop(0.5,"#123725"); g.addColorStop(1,"#0f2b1f"); ctx.fillStyle=g; ctx.fillRect(0,0,canvas.width,canvas.height);
-      // river
       ctx.fillStyle="#243a5e"; ctx.fillRect(0, RIVER_Y, canvas.width, RIVER_H);
-      // bridges
       const bridges=[ {x:BRIDGE_CENTERS[0]-BRIDGE_W/2, y:RIVER_Y-6}, {x:BRIDGE_CENTERS[1]-BRIDGE_W/2, y:RIVER_Y-6} ]; ctx.fillStyle="#6e5537"; bridges.forEach(b=>{ ctx.fillRect(b.x, b.y, BRIDGE_W, RIVER_H+12); ctx.fillStyle="#7a6040"; for(let i=0;i<BRIDGE_W;i+=18){ ctx.fillRect(b.x+i+2, b.y, 8, RIVER_H+12); } ctx.fillStyle="#6e5537"; });
-      // lane lines
       ctx.strokeStyle="rgba(255,255,255,0.15)"; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(0, canvas.height/3); ctx.lineTo(canvas.width, canvas.height/3); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, canvas.height*2/3); ctx.lineTo(canvas.width, canvas.height*2/3); ctx.stroke();
-      // half overlays
-      ctx.fillStyle="rgba(0,0,255,0.05)"; ctx.fillRect(0, canvas.height/2, canvas.width, canvas.height/2); // blue side
-      ctx.fillStyle="rgba(255,0,0,0.05)"; ctx.fillRect(0, 0, canvas.width, canvas.height/2); // red side
-
-      // pockets overlay for your allowed enemy lanes
-      const onBlue = mySide==="blue"; const enemyTop = onBlue; // enemy is top when blue
-      if(enemyTop){
-        if(isPocketOpenForLane(true)){ ctx.fillStyle="rgba(0,255,0,0.08)"; ctx.fillRect(0, 0, canvas.width/2, canvas.height/2); }
-        if(isPocketOpenForLane(false)){ ctx.fillStyle="rgba(0,255,0,0.08)"; ctx.fillRect(canvas.width/2, 0, canvas.width/2, canvas.height/2); }
-      }else{
-        if(isPocketOpenForLane(true)){ ctx.fillStyle="rgba(0,255,0,0.08)"; ctx.fillRect(0, canvas.height/2, canvas.width/2, canvas.height/2); }
-        if(isPocketOpenForLane(false)){ ctx.fillStyle="rgba(0,255,0,0.08)"; ctx.fillRect(canvas.width/2, canvas.height/2, canvas.width/2, canvas.height/2); }
-      }
+      ctx.fillStyle="rgba(0,0,255,0.05)"; ctx.fillRect(0, canvas.height/2, canvas.width, canvas.height/2);
+      ctx.fillStyle="rgba(255,0,0,0.05)"; ctx.fillRect(0, 0, canvas.width, canvas.height/2);
+      const onBlue = mySide==="blue";
+      if(onBlue){ if(isPocketOpenForLane(true)){ ctx.fillStyle="rgba(0,255,0,0.08)"; ctx.fillRect(0, 0, canvas.width/2, canvas.height/2); } if(isPocketOpenForLane(false)){ ctx.fillStyle="rgba(0,255,0,0.08)"; ctx.fillRect(canvas.width/2, 0, canvas.width/2, canvas.height/2); } }
+      else{ if(isPocketOpenForLane(true)){ ctx.fillStyle="rgba(0,255,0,0.08)"; ctx.fillRect(0, canvas.height/2, canvas.width/2, canvas.height/2); } if(isPocketOpenForLane(false)){ ctx.fillStyle="rgba(0,255,0,0.08)"; ctx.fillRect(canvas.width/2, canvas.height/2, canvas.width/2, canvas.height/2); } }
     }
 
     function drawTower(t){
@@ -606,16 +621,11 @@
     function drawTowerName(t, nm){ if(!nm) return; ctx.font='16px Arial'; ctx.textAlign='center'; ctx.lineWidth=3; ctx.strokeStyle='black'; const size = t.king ? 60 : 50; const y = t.side==='blue' ? (t.y + size/2 + 18) : (t.y - size/2 - 14); ctx.strokeText(nm, t.x, y); ctx.fillStyle='white'; ctx.fillText(nm, t.x, y); }
 
     function drawUnit(u){
-      // avatar sprite
       const sprite = u.sprite || getSprite(u.spriteUrl);
       if(sprite && sprite.complete){ ctx.drawImage(sprite, u.x-18, u.y-18, 36, 36); }
-      else{ // fallback circle
-        ctx.fillStyle = (u.side==="blue") ? "#8de1ff" : "#ff7f7f"; ctx.beginPath(); ctx.arc(u.x, u.y, 14, 0, Math.PI*2); ctx.fill();
-      }
-      // goofy feet
+      else{ ctx.fillStyle = (u.side==="blue") ? "#8de1ff" : "#ff7f7f"; ctx.beginPath(); ctx.arc(u.x, u.y, 14, 0, Math.PI*2); ctx.fill(); }
       const step = Math.sin(Date.now()/120)*4; ctx.strokeStyle=(u.side==="blue")?"#c7f1ff":"#ffd1d1"; ctx.lineWidth=3;
       ctx.beginPath(); ctx.moveTo(u.x-8, u.y+14); ctx.lineTo(u.x-8, u.y+20+step); ctx.stroke(); ctx.beginPath(); ctx.moveTo(u.x+8, u.y+14); ctx.lineTo(u.x+8, u.y+20-step); ctx.stroke();
-      // hp bar
       ctx.fillStyle="#900"; ctx.fillRect(u.x-15, u.y-24, 30, 5); ctx.fillStyle="#3f3"; ctx.fillRect(u.x-15, u.y-24, 30*(u.hp/u.maxHp), 5);
     }
 
@@ -639,11 +649,9 @@
       const AGGRO_PAD = 20; const DROP_MULT = 1.3;
       units.forEach(u=>{
         const attackRange = Math.max(20, u.range||25); const detectRange = attackRange + AGGRO_PAD;
-        // unit target maintain/acquire
         if(u.goalUnit && u.goalUnit.hp>0){ const dx=u.goalUnit.x-u.x, dy=u.goalUnit.y-u.y; const d=Math.hypot(dx,dy); if(d > detectRange*DROP_MULT){ u.goalUnit = null; } }
         if(!u.goalUnit){ u.goalUnit = nearestEnemyUnit(u, detectRange) || null; }
         if(u.goalUnit){ const dx=u.goalUnit.x-u.x, dy=u.goalUnit.y-u.y; const d=Math.hypot(dx,dy); if(d <= attackRange){ if(u.cooldown<=0 && u.dmg>0){ u.goalUnit.hp -= u.dmg; u.cooldown = 30; if(u.goalUnit.hp<=0){ u.goalUnit=null; } } } else { moveTowards(u, u.goalUnit.x, u.goalUnit.y); } if(u.cooldown>0) u.cooldown--; return; }
-        // bridge/tower logic
         if(u.pathStage==='toBridge'){ if(moveTowards(u, u.targetX, u.targetY)){ u.pathStage='crossing'; u.targetY = (u.side==='blue') ? (RIVER_Y - 8) : (RIVER_Y + RIVER_H + 8); } if(u.cooldown>0) u.cooldown--; return; }
         if(u.pathStage==='crossing'){ if(moveTowards(u, u.targetX, u.targetY)){ u.pathStage='toTarget'; } if(u.cooldown>0) u.cooldown--; return; }
         if(!u.goal || u.goal.hp<=0){ u.goal = nearestEnemyTower(u); }
@@ -682,22 +690,16 @@
     }
     function attachClientStateListener(){ stateRef.on("value", snap=>{ const st=snap.val(); if(!st) return; towers = (st.towers||[]).map(t=>({...t})); units  = (st.units ||[]).map(u=>({...u})); latestClientState = st; }); }
 
-    /* subscribe levels for room players (host needs opponent levels) */
-    function subscribePlayerLevelsForRoom(){
-      if(!roomPlayersRef) return; roomPlayersRef.once('value').then(s=>{ s.forEach(ch=>{ const pid = ch.key; db.ref('players/'+pid+'/levels').on('value', ls=>{ playerLevelsCache[pid] = ls.val()||{}; }); }); });
-    }
+    function subscribePlayerLevelsForRoom(){ if(!roomPlayersRef) return; roomPlayersRef.once('value').then(s=>{ s.forEach(ch=>{ const pid = ch.key; db.ref('players/'+pid+'/levels').on('value', ls=>{ playerLevelsCache[pid] = ls.val()||{}; }); }); }); }
 
-    /* Names from room */
     async function loadRoomNames(){ const playersSnap = await roomRef.child("players").once("value"); let blueId=null, redId=null; playersSnap.forEach(ch=>{ const v=ch.val(); if(!v) return; if(v.side==="blue") blueId=ch.key; if(v.side==="red") redId=ch.key; }); const [bNameSnap, rNameSnap] = await Promise.all([ db.ref("players/"+blueId+"/name").once("value"), db.ref("players/"+redId+"/name").once("value") ]); nameBlue = bNameSnap.val() || "Blue"; nameRed  = rNameSnap.val() || "Red"; }
 
-    /* Room auto-cleanup helpers */
     let inactiveCleanupTimer=null, endedCleanupTimer=null;
     function setupRoomAutoCleanup(){
       roomRef.child("state").on("value", s=>{ if(s.val()==="ended"){ if(endedCleanupTimer) clearTimeout(endedCleanupTimer); endedCleanupTimer = setTimeout(()=>{ roomRef.remove(); }, 15000); } });
       roomPlayersRef.on("value", s=>{ let anyConnected=false; s.forEach(p=>{ const v=p.val(); if(v && v.connected) anyConnected=true; }); if(!anyConnected){ if(inactiveCleanupTimer) clearTimeout(inactiveCleanupTimer); inactiveCleanupTimer = setTimeout(()=>{ roomRef.remove(); }, 8000); } else { if(inactiveCleanupTimer){ clearTimeout(inactiveCleanupTimer); inactiveCleanupTimer=null; } } });
     }
 
-    /* Main draw loop */
     function drawLoop(ts){
       drawArena();
       towers.forEach(t=> drawTower(t)); const kBlue = towers.find(t=>t.side==="blue" && t.king); const kRed  = towers.find(t=>t.side==="red"  && t.king); if(kBlue) drawTowerName(kBlue, nameBlue); if(kRed)  drawTowerName(kRed,  nameRed);
@@ -708,10 +710,7 @@
         if(ts - lastPublishTime >= PUBLISH_MS){ lastPublishTime = ts; const now = performance.now(); const tracers = projectiles.filter(p=> now - p.born < 120).map(p=>({x:p.x,y:p.y})); stateRef.set({ towers: towers.map(t=>({x:t.x,y:t.y,hp:t.hp,side:t.side,king:!!t.king})), units:  units.map(u=>({x:u.x,y:u.y,hp:u.hp,maxHp:u.maxHp,side:u.side,name:u.name,spriteUrl:u.spriteUrl})), tracers }); }
       }
 
-      // visuals for non-host projectiles (tracers)
       if(!isHost && latestClientState && latestClientState.tracers){ latestClientState.tracers.forEach(p=>{ ctx.fillStyle="#ffd86b"; ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill(); }); }
-
-      // host projectile visuals
       if(isHost){ projectiles.forEach(p=>{ ctx.fillStyle="#ffd86b"; ctx.beginPath(); ctx.arc(p.x,p.y,5,0,Math.PI*2); ctx.fill(); }); }
 
       units.forEach(u=> drawUnit(u));
@@ -743,7 +742,7 @@
       loadRoomNames(); elixir=5; lastElixirTime=Date.now(); initElixirBar(); inBattle=true;
 
       towers=[
-        // Blue (NERFED dmg/range through AI function, but keep base fields)
+        // Blue (nerfed params reflected via AI logic as well)
         {x:200,y:560,hp:600,side:"blue",king:false, range:170, dmg:16, cdMax:70},
         {x:600,y:560,hp:600,side:"blue",king:false, range:170, dmg:16, cdMax:70},
         {x:400,y:640,hp:1000,side:"blue",king:true,  range:220, dmg:26, cdMax:70},
@@ -772,12 +771,13 @@
       document.getElementById("statusText").innerText="Idle";
 
       if(actionsRef) actionsRef.off(); if(stateRef) stateRef.off(); if(roomPlayersRef) roomPlayersRef.off(); if(roomRef) roomRef.child("host").off();
-
       leaveRoomAndMaybeDelete();
-
       placementCircle=null; selectedCard=null; gameOver=false; roomId=null; mySide=null; searching=false; battleReady=false; queueAdded=false; isHost=false; hostId=null; latestClientState=null;
       inBattle=false; if(rafId){ cancelAnimationFrame(rafId); rafId=null; }
       playerRef.child("ownedCards").off();
+
+      // Also GC after exiting to ensure empty rooms are removed
+      garbageCollectRooms();
     }
 
     /************ Leaderboard ************/
