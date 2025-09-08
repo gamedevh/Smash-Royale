@@ -1,3 +1,11 @@
+# Build a full updated HTML with a 30-day Season Pass system (XP, levels, rewards, reset), 
+# integrated into the previous room-GC build. Includes:
+# - Player season data under players/{id}/season {seasonStart,xp,claimed:{}}
+# - Season cycles every 30 days from epoch
+# - XP granted on match end (+120 win, +60 loss)
+# - Modal UI to view progress & claim rewards; progress bar; top HUD badge
+# - Safe Firebase transactions; GC kept
+# - No external network calls except Firebase/Images
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,16 +17,18 @@
     function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-61B7P6WEL0');
   </script>
   <meta charset="UTF-8" />
-  <title>Flash Royale — Clean Room GC</title>
+  <title>Flash Royale — Season Pass</title>
   <style>
     :root{ --hud-bg: rgba(10,15,30,0.70); --hud-border:#1e3d59; }
     body{ margin:0; font-family:Arial, sans-serif; color:#fff; user-select:none; overflow:hidden; background:#0b0f1c; }
 
     /* Top HUD */
     .top-bar{ display:flex; justify-content:space-between; align-items:center; padding:10px 20px; background:var(--hud-bg); border-bottom:3px solid var(--hud-border); font-size:14px; position:relative; z-index:3; }
-    .currency{display:flex; gap:15px;}
+    .currency{display:flex; gap:15px; align-items:center;}
     .currency div{background:#2d3e50; padding:5px 12px; border-radius:8px; display:flex; align-items:center; gap:6px;}
     #onlineCount{ margin-left:12px; font-weight:bold; }
+    #seasonBtn{ margin-left:10px; padding:6px 12px; border:2px solid #fff; border-radius:10px; background:#22c55e; color:#000; cursor:pointer; font-weight:bold; }
+    #seasonBadge{ margin-left:8px; background:#0ea5e9; border:2px solid #fff; border-radius:8px; padding:3px 8px; font-weight:bold; }
 
     /* Screens */
     .screen{ display:none; height:calc(100vh - 56px); position:relative; }
@@ -103,6 +113,24 @@
     #startOverlay{ position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; background: linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.55)), url('startinglayer.png') center center / cover no-repeat; cursor: pointer; }
     #startOverlay .startText{ font-size: 42px; font-weight: 800; letter-spacing: 1px; background: rgba(0,0,0,0.55); padding: 14px 26px; border: 2px solid #fff; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); text-shadow: 0 2px 12px rgba(255,255,255,0.25); user-select: none; -webkit-user-select: none; animation: pulseText 1.6s ease-in-out infinite; }
     @keyframes pulseText{ 0%{ transform: scale(1); opacity: 1; } 50%{ transform: scale(1.05); opacity: 0.92; } 100%{ transform: scale(1); opacity: 1; } }
+
+    /* === SEASON PASS MODAL === */
+    #seasonOverlay{ position:fixed; inset:0; background:rgba(0,0,0,0.68); display:none; align-items:center; justify-content:center; z-index:30; }
+    #seasonModal{ width:760px; max-width:calc(100% - 40px); background:#0b1220; border:2px solid #22c55e; border-radius:18px; box-shadow:0 30px 60px rgba(0,0,0,0.5); padding:18px 18px 12px; position:relative; color:#e2e8f0; }
+    #seasonClose{ position:absolute; top:8px; right:8px; width:32px; height:32px; border-radius:50%; border:2px solid #86efac; background:#052e16; color:#e2e8f0; font-size:18px; line-height:26px; cursor:pointer; }
+    #seasonHeader{ display:flex; align-items:center; gap:12px; margin:6px 0 12px; }
+    #seasonTitle{ font-size:20px; margin:0; }
+    #seasonCountdown{ margin-left:auto; font-size:12px; opacity:0.8; }
+    .seasonProgressWrap{ background:#111827; border:1px solid #374151; border-radius:12px; padding:8px; }
+    .seasonProgressBar{ height:14px; border-radius:8px; background:#1f2937; overflow:hidden; }
+    .seasonProgressFill{ height:100%; background:linear-gradient(90deg,#22c55e,#84cc16); width:0%; transition: width 250ms ease; }
+    .seasonRow{ display:grid; grid-template-columns: 70px 1fr 140px 110px; align-items:center; gap:10px; padding:8px 8px; border-bottom:1px solid rgba(255,255,255,0.06); }
+    .seasonRow:nth-child(odd){ background:rgba(255,255,255,0.02); }
+    .seasonRow .lvl{ font-weight:bold; text-align:center; }
+    .seasonRow .reward{ opacity:0.9; }
+    .seasonRow .status{ font-size:12px; opacity:0.8; }
+    .claim-btn{ padding:6px 10px; border-radius:8px; border:2px solid #fff; background:#22c55e; color:#000; cursor:pointer; font-weight:bold; }
+    .claim-btn[disabled]{ opacity:.5; cursor:not-allowed; }
   </style>
 
   <!-- Firebase compat SDKs -->
@@ -121,6 +149,8 @@
   <div class="top-bar">
     <div class="currency">
       <div><img src="https://img.icons8.com/emoji/48/000000/coin-emoji.png" width="18" height="18"/> <span id="coinCount">0</span></div>
+      <div id="seasonBadge">SP Lv <span id="seasonLevelBadge">0</span> · <span id="seasonXpBadge">0</span>xp</div>
+      <button id="seasonBtn">Season Pass</button>
     </div>
     <div>
       <span id="statusText">Idle</span>
@@ -214,7 +244,7 @@
         <ul>
           <li>Two side towers + one king tower per side. <em>(Nerfed tower damage/range)</em></li>
           <li>Destroy the opponent’s king tower to win the match.</li>
-          <li>Win rewards: +100 coins, +5 trophies.</li>
+          <li>Win rewards: +100 coins, +5 trophies + Season XP.</li>
         </ul>
       </div>
       <div class="section"><strong>Character Levels</strong>
@@ -222,6 +252,13 @@
           <li>Each character can be upgraded to <b>Level 15</b>.</li>
           <li>Levels increase HP, Damage, Speed, and Range slightly.</li>
           <li>Upgrade costs scale with level. Use coins won from battles.</li>
+        </ul>
+      </div>
+      <div class="section"><strong>Season Pass</strong>
+        <ul>
+          <li>Earn Season XP from battles (<b>+120</b> for wins, <b>+60</b> for losses).</li>
+          <li>Level up your Season (20 levels). Claim coin rewards per level.</li>
+          <li>Season resets automatically every <b>30 days</b>.</li>
         </ul>
       </div>
       <div class="section"><strong>Shop & Coins</strong>
@@ -257,7 +294,7 @@
   <div id="elixirBar"></div>
 
   <!-- Result -->
-  <div id="resultScreen"><h1 id="resultText"></h1><p id="rewardText"></p><button onclick="returnToMenu()">OK</button></div>
+  <div id="resultScreen"><h1 id="resultText"></h1><p id="rewardText"></p><p id="xpText" style="margin-top:8px; font-size:18px;"></p><button onclick="returnToMenu()">OK</button></div>
 
   <!-- CHANGELOG MODAL -->
   <div id="changelogOverlay" role="dialog" aria-modal="true" aria-labelledby="changelogTitle">
@@ -265,11 +302,31 @@
       <button id="changelogClose" aria-label="Close changelog">×</button>
       <h3 id="changelogTitle">What’s new in Flash Royale</h3>
       <ul id="changelogList">
-        <li>Room Garbage Collector: empty/ended rooms auto-removed on load & before matchmaking.</li>
-        <li>Rejoin only if someone is still connected; otherwise the room is deleted.</li>
-        <li>Character Levels (max 15), Pockets, Tower nerf, unit sprites, and stability fixes remain.</li>
+        <li>Season Pass: 30-day cycles, Season XP & rewards UI, claimable tiers.</li>
+        <li>XP from battles: +120 win, +60 loss.</li>
+        <li>Room Garbage Collector to prevent stale re-joins.</li>
+        <li>Character Levels (max 15), Pockets, tower nerf, unit sprites, stability fixes.</li>
       </ul>
       <div id="changelogHint">Click × to close</div>
+    </div>
+  </div>
+
+  <!-- SEASON PASS MODAL -->
+  <div id="seasonOverlay" role="dialog" aria-modal="true" aria-labelledby="seasonTitle">
+    <div id="seasonModal">
+      <button id="seasonClose" aria-label="Close season">×</button>
+      <div id="seasonHeader">
+        <h3 id="seasonTitle">🎟️ Season Pass</h3>
+        <div id="seasonCountdown">Refreshes in —</div>
+      </div>
+      <div class="seasonProgressWrap">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <div>Season Level: <b id="seasonLevelText">0</b> • XP: <b id="seasonXpText">0</b>/<span id="seasonNextXpText">150</span></div>
+          <div>Started: <span id="seasonStartDate">—</span></div>
+        </div>
+        <div class="seasonProgressBar"><div class="seasonProgressFill" id="seasonProgressFill"></div></div>
+      </div>
+      <div id="seasonRows" style="max-height:380px; overflow:auto; margin-top:10px;"></div>
     </div>
   </div>
 
@@ -298,13 +355,9 @@
           const r = child.val() || {};
           const players = r.players || {};
           let anyConnected = false;
-          Object.keys(players).forEach(pid=>{
-            if(players[pid] && players[pid].connected) anyConnected = true;
-          });
+          Object.keys(players).forEach(pid=>{ if(players[pid] && players[pid].connected) anyConnected = true; });
           const stale = !anyConnected || r.state !== 'active' || !!r.winner;
-          if(stale){
-            db.ref('rooms/'+child.key).remove();
-          }
+          if(stale){ db.ref('rooms/'+child.key).remove(); }
         });
       }catch(e){ /* noop */ }
     }
@@ -346,6 +399,141 @@
     // Presence flags
     playerRef.onDisconnect().update({ online:false, disconnected:true });
 
+    /************ Season Pass ************/
+    const SEASON_MS = 30*24*60*60*1000;
+    const SEASON_MAX_LEVEL = 20;
+    const SEASON_XP_PER_LEVEL = 150; // flat per level
+    const SEASON_REWARDS = Array.from({length: SEASON_MAX_LEVEL}, (_,i)=>{
+      const lvl = i+1;
+      const coins = 50 + 25*i; // 50,75,100,...
+      return { level: lvl, desc: `+${coins} coins`, coins };
+    });
+
+    function seasonStartMsFor(now){ return Math.floor(now / SEASON_MS) * SEASON_MS; }
+    function xpForLevel(level){ if(level<=0) return 0; return SEASON_XP_PER_LEVEL * level; } // xp needed to *reach* level
+    function levelFromXp(xp){ let L=0; for(let i=1;i<=SEASON_MAX_LEVEL;i++){ if(xp >= xpForLevel(i)) L=i; } return L; }
+    function levelProgress(xp){
+      const L = levelFromXp(xp);
+      const prev = xpForLevel(L);
+      const next = (L>=SEASON_MAX_LEVEL) ? prev : xpForLevel(L+1);
+      const inLevel = xp - prev;
+      const need = Math.max(1, next - prev);
+      const pct = (L>=SEASON_MAX_LEVEL) ? 1 : Math.max(0, Math.min(1, inLevel/need));
+      return {level:L, inLevel, need, pct, nextXp: (L>=SEASON_MAX_LEVEL? prev: next)};
+    }
+
+    async function ensureSeasonUpToDate(){
+      const now = Date.now();
+      const currentStart = seasonStartMsFor(now);
+      const ref = playerRef.child('season');
+      const snap = await ref.once('value');
+      const v = snap.val();
+      if(!v || v.seasonStart !== currentStart){
+        await ref.set({ seasonStart: currentStart, xp: 0, claimed: {} });
+      }
+    }
+
+    // XP award
+    async function addSeasonXP(delta){
+      if(delta<=0) return;
+      const now = Date.now();
+      const currentStart = seasonStartMsFor(now);
+      const ref = playerRef.child('season');
+      await ref.transaction(s=>{
+        if(!s || s.seasonStart !== currentStart){
+          return { seasonStart: currentStart, xp: Math.max(0, delta), claimed: {} };
+        }
+        const xp = Math.max(0, (s.xp||0) + delta);
+        return {...s, xp};
+      });
+    }
+
+    // Claim reward
+    function claimSeasonLevel(level){
+      const ref = playerRef.child('season');
+      ref.once('value').then(s=>{
+        const v = s.val() || {xp:0,claimed:{},seasonStart:seasonStartMsFor(Date.now())};
+        const unlocked = levelFromXp(v.xp);
+        const already = (v.claimed && v.claimed[level]);
+        if(level<=0 || level>SEASON_MAX_LEVEL || level>unlocked || already){ return; }
+        const reward = SEASON_REWARDS[level-1];
+        const updates = {};
+        updates['season/claimed/'+level] = true;
+        updates['coins'] = firebase.database.ServerValue.increment(reward.coins);
+        playerRef.update(updates);
+      });
+    }
+
+    function fmtDate(ms){ const d = new Date(ms); return d.toLocaleDateString(); }
+    function msLeftInSeason(){ const now=Date.now(); const start=seasonStartMsFor(now); const end = start + SEASON_MS; return Math.max(0, end - now); }
+    function fmtCountdown(ms){ const s = Math.floor(ms/1000); const d = Math.floor(s/86400); const h = Math.floor((s%86400)/3600); const m = Math.floor((s%3600)/60); return `${d}d ${h}h ${m}m`; }
+
+    // UI bindings
+    const seasonBtn = document.getElementById('seasonBtn');
+    const seasonOverlay = document.getElementById('seasonOverlay');
+    const seasonClose = document.getElementById('seasonClose');
+
+    if(seasonBtn){ seasonBtn.addEventListener('click', ()=>{ ensureSeasonUpToDate().then(()=>{ openSeasonUI(); }); }); }
+    if(seasonClose){ seasonClose.addEventListener('click', ()=> seasonOverlay.style.display='none'); }
+    if(seasonOverlay){ seasonOverlay.addEventListener('click', (e)=>{ if(e.target===seasonOverlay) seasonOverlay.style.display='none'; }); }
+
+    function openSeasonUI(){
+      seasonOverlay.style.display = 'flex';
+      refreshSeasonUI();
+    }
+
+    function refreshSeasonUI(){
+      playerRef.child('season').once('value').then(s=>{
+        const v = s.val() || {xp:0, claimed:{}, seasonStart: seasonStartMsFor(Date.now())};
+        const prog = levelProgress(v.xp||0);
+        document.getElementById('seasonLevelText').innerText = prog.level;
+        document.getElementById('seasonXpText').innerText = (v.xp||0) - xpForLevel(prog.level);
+        document.getElementById('seasonNextXpText').innerText = (prog.level>=SEASON_MAX_LEVEL) ? 0 : (xpForLevel(prog.level+1) - xpForLevel(prog.level));
+        document.getElementById('seasonProgressFill').style.width = (prog.pct*100).toFixed(0)+'%';
+        document.getElementById('seasonStartDate').innerText = fmtDate(v.seasonStart||seasonStartMsFor(Date.now()));
+
+        const rows = document.getElementById('seasonRows'); rows.innerHTML='';
+        for(let lvl=1; lvl<=SEASON_MAX_LEVEL; lvl++){
+          const reward = SEASON_REWARDS[lvl-1];
+          const unlocked = prog.level >= lvl;
+          const claimed = v.claimed && v.claimed[lvl];
+          const row = document.createElement('div'); row.className='seasonRow';
+          row.innerHTML = `
+            <div class="lvl">Lv ${lvl}</div>
+            <div class="reward">${reward.desc}</div>
+            <div class="status">${unlocked ? (claimed ? '✅ Claimed' : 'Ready to claim') : 'Locked'}</div>
+            <div style="text-align:right;">
+              <button class="claim-btn" ${(!unlocked || claimed) ? 'disabled' : ''} data-level="${lvl}">${claimed?'Claimed':'Claim'}</button>
+            </div>
+          `;
+          const btn = row.querySelector('.claim-btn');
+          if(btn && unlocked && !claimed){
+            btn.addEventListener('click', ()=>{ claimSeasonLevel(lvl); setTimeout(refreshSeasonUI, 300); });
+          }
+          rows.appendChild(row);
+        }
+      });
+
+      // countdown
+      const cd = document.getElementById('seasonCountdown');
+      if(cd){
+        const tick = ()=>{ cd.textContent = 'Refreshes in ' + fmtCountdown(msLeftInSeason()); };
+        tick();
+        setTimeout(()=>{ if(seasonOverlay.style.display==='flex') tick(); }, 60000);
+      }
+    }
+
+    // Season HUD badges live-updated
+    playerRef.child('season').on('value', s=>{
+      const v = s.val() || {xp:0, seasonStart:seasonStartMsFor(Date.now())};
+      const L = levelFromXp(v.xp||0);
+      document.getElementById('seasonLevelBadge').innerText = L;
+      document.getElementById('seasonXpBadge').innerText = v.xp||0;
+    });
+
+    // Initialize season record on load
+    ensureSeasonUpToDate();
+
     /************ Cards (24 total) ************/
     const allCards = [
       {name:"Knight",hp:200,maxHp:200,dmg:20,range:25,cost:3,speed:2,img:"https://img.icons8.com/color/96/knight.png", price:0},
@@ -376,7 +564,7 @@
       {name:"Mega Minion",hp:140,maxHp:140,dmg:30,range:50,cost:3,speed:3,img:"https://img.icons8.com/color/96/minion.png", price:350}
     ];
 
-    // Sprite cache for unit avatars
+    // Sprite cache
     const spriteCache = new Map();
     function getSprite(url){ if(!url) return null; if(spriteCache.has(url)) return spriteCache.get(url); const img=new Image(); img.src=url; spriteCache.set(url,img); return img; }
 
@@ -384,22 +572,13 @@
     let currentLevels = {}; // name -> level
     function levelOf(name){ return Math.max(1, Math.min(15, (currentLevels && currentLevels[name]) || 1)); }
     function upgradeCost(level){ return 150 * level; } // cost to go from L -> L+1
-
-    function calcLevelStats(card, level){
-      const L = Math.max(1, Math.min(15, level||1));
-      const hp = Math.round(card.hp * (1 + 0.07*(L-1))); // +7% / level
-      const dmg = Math.round(card.dmg * (1 + 0.06*(L-1))); // +6% / level
-      const speed = Math.max(0.35, (card.speed * 0.30) * (1 + 0.02*(L-1))); // slowFactor 0.30 baseline, +2%/level
-      const range = Math.round((card.range||25) + Math.floor((L-1)/2)); // +1 every 2 levels
-      return {hp, dmg, speed, range};
-    }
+    function calcLevelStats(card, level){ const L = Math.max(1, Math.min(15, level||1)); const hp = Math.round(card.hp * (1 + 0.07*(L-1))); const dmg = Math.round(card.dmg * (1 + 0.06*(L-1))); const speed = Math.max(0.35, (card.speed * 0.30) * (1 + 0.02*(L-1))); const range = Math.round((card.range||25) + Math.floor((L-1)/2)); return {hp, dmg, speed, range}; }
 
     function renderDeck(owned){
       const deckEl=document.getElementById("deck"); deckEl.innerHTML="";
       allCards.forEach(c=>{
         if(!owned || owned[c.name]){
-          const L = levelOf(c.name);
-          const stats = calcLevelStats(c,L);
+          const L = levelOf(c.name); const stats = calcLevelStats(c,L);
           const d=document.createElement("div"); d.className="card"; d.style.cursor='default';
           d.innerHTML = `
             <div class="elixir-cost">${c.cost}</div>
@@ -638,8 +817,7 @@
       const stats = calcLevelStats(card, level);
       const bridgeX = pickNearestBridgeX(x);
       const startTargetY = side==='blue' ? (RIVER_Y + RIVER_H + 8) : (RIVER_Y - 8);
-      const spriteUrl = card.img;
-      const sprite = getSprite(spriteUrl);
+      const spriteUrl = card.img; const sprite = getSprite(spriteUrl);
       units.push({ name:card.name, hp:stats.hp, maxHp:stats.hp, dmg:stats.dmg, range:stats.range, speed:stats.speed, side, x, y, cooldown:0, dir:(side==="blue"? -1:1), pathStage:'toBridge', targetX: bridgeX, targetY: startTargetY, goal:null, goalUnit:null, spriteUrl, sprite });
     }
 
@@ -673,7 +851,21 @@
     }
     function updateProjectiles(){ const radius=5; projectiles.forEach(p=>{ p.x += p.vx; p.y += p.vy; for(const u of units){ if(u.side===p.side) continue; const dx=u.x-p.x, dy=u.y-p.y; if(dx*dx+dy*dy <= (radius+12)*(radius+12)){ u.hp -= p.dmg; p.dead=true; } } if(p.x<-20||p.x>canvas.width+20||p.y<-20||p.y>canvas.height+20) p.dead=true; }); projectiles = projectiles.filter(p=>!p.dead); }
 
-    function endGame(winnerColor){ if(gameOver) return; gameOver=true; roomRef.child("state").set("ended"); roomRef.child("winner").set(winnerColor); const iWon = (winnerColor==="Blue" && mySide==="blue") || (winnerColor==="Red" && mySide==="red"); if(iWon){ playerRef.child("coins").transaction(c=>(c||0)+100); playerRef.child("trophies").transaction(t=>(t||0)+5); } document.getElementById("resultText").innerText = iWon ? "🏆 Victory!" : "❌ Defeat"; document.getElementById("rewardText").innerText = iWon ? "+100 Coins, +5 Trophies" : "Better luck next time!"; document.getElementById("resultScreen").style.display="block"; }
+    function endGame(winnerColor){
+      if(gameOver) return; gameOver=true;
+      roomRef.child("state").set("ended"); roomRef.child("winner").set(winnerColor);
+      const iWon = (winnerColor==="Blue" && mySide==="blue") || (winnerColor==="Red" && mySide==="red");
+      if(iWon){
+        playerRef.child("coins").transaction(c=>(c||0)+100);
+        playerRef.child("trophies").transaction(t=>(t||0)+5);
+      }
+      const gainXP = iWon ? 120 : 60;
+      addSeasonXP(gainXP);
+      document.getElementById("resultText").innerText = iWon ? "🏆 Victory!" : "❌ Defeat";
+      document.getElementById("rewardText").innerText = iWon ? "+100 Coins, +5 Trophies" : "Better luck next time!";
+      document.getElementById("xpText").innerText = `+${gainXP} Season XP`;
+      document.getElementById("resultScreen").style.display="block";
+    }
 
     function leaveRoomAndMaybeDelete(){ if(!roomRef || !roomId || !roomCleanupArmed) return; const myPlayerNode = roomRef.child("players/"+playerId); myPlayerNode.update({connected:false, lastSeen: firebase.database.ServerValue.TIMESTAMP}); roomRef.child("players").once("value").then(s=>{ let any=false; s.forEach(p=>{ if(p.val() && p.val().connected) any=true; }); if(!any){ roomRef.remove(); } }); }
 
@@ -742,7 +934,7 @@
       loadRoomNames(); elixir=5; lastElixirTime=Date.now(); initElixirBar(); inBattle=true;
 
       towers=[
-        // Blue (nerfed params reflected via AI logic as well)
+        // Blue
         {x:200,y:560,hp:600,side:"blue",king:false, range:170, dmg:16, cdMax:70},
         {x:600,y:560,hp:600,side:"blue",king:false, range:170, dmg:16, cdMax:70},
         {x:400,y:640,hp:1000,side:"blue",king:true,  range:220, dmg:26, cdMax:70},
@@ -757,7 +949,7 @@
       playerRef.child("ownedCards").on("value", s=>{ if(document.getElementById("battleScreen").style.display==="block"){ renderHand(s.val()||{}); } });
 
       setupRoomAutoCleanup();
-      roomRef.child("winner").on("value", snap=>{ const w=snap.val(); if(!w || gameOver) return; const iWon = (w==="Blue" && mySide==="blue") || (w==="Red" && mySide==="red"); gameOver=true; document.getElementById("resultText").innerText = iWon ? "🏆 Victory!" : "❌ Defeat"; document.getElementById("rewardText").innerText = iWon ? "+100 Coins, +5 Trophies" : "Better luck next time!"; document.getElementById("resultScreen").style.display="block"; });
+      roomRef.child("winner").on("value", snap=>{ const w=snap.val(); if(!w || gameOver) return; const iWon = (w==="Blue" && mySide==="blue") || (w==="Red" && mySide==="red"); gameOver=true; const gainXP = iWon ? 120 : 60; addSeasonXP(gainXP); document.getElementById("resultText").innerText = iWon ? "🏆 Victory!" : "❌ Defeat"; document.getElementById("rewardText").innerText = iWon ? "+100 Coins, +5 Trophies" : "Better luck next time!"; document.getElementById("xpText").innerText = `+${gainXP} Season XP`; document.getElementById("resultScreen").style.display="block"; });
 
       rafId = requestAnimationFrame(drawLoop);
     }
@@ -776,7 +968,7 @@
       inBattle=false; if(rafId){ cancelAnimationFrame(rafId); rafId=null; }
       playerRef.child("ownedCards").off();
 
-      // Also GC after exiting to ensure empty rooms are removed
+      // GC after exiting to ensure empty rooms are removed
       garbageCollectRooms();
     }
 
@@ -809,3 +1001,4 @@
   </script>
 </body>
 </html>
+"""
