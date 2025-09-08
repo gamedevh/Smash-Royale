@@ -388,11 +388,11 @@ animation: pulseText 1.6s ease-in-out infinite;
 </div>
 
 <div class="section">
-<strong>Placing Units</strong>
+<strong>Placing Units & Spells</strong>
 <ul>
-<li>Click a card in your hand, then click anywhere on <em>your half</em> of the arena. A white circle follows your cursor before placing.</li>
-<li>Units automatically head to the nearest bridge, cross, then target enemy towers. They stop walking while attacking.</li>
-<li>Both players see each other’s placements and damage in real time.</li>
+<li>Click a card in your hand, then click to place. Units must be placed on your half; <b>spells</b> can be cast <b>anywhere</b>.</li>
+<li>Units will prioritize fighting enemy units first before pushing towers.</li>
+<li><b>Fireball</b> and <b>Arrows</b> are area-damage spells.</li>
 </ul>
 </div>
 
@@ -409,6 +409,7 @@ animation: pulseText 1.6s ease-in-out infinite;
 <strong>Towers & Win</strong>
 <ul>
 <li>Two side towers + one king tower per side. Towers shoot back automatically.</li>
+<li><i>Note:</i> towers do slightly less damage now for longer trades.</li>
 <li>Destroy the opponent’s king tower to win the match.</li>
 <li>Win rewards: +100 coins, +5 trophies.</li>
 </ul>
@@ -417,7 +418,7 @@ animation: pulseText 1.6s ease-in-out infinite;
 <div class="section">
 <strong>Shop & Coins</strong>
 <ul>
-<li>Earn coins from wins and buy new characters in the shop.</li>
+<li>Earn coins from wins and buy new characters or spells in the shop.</li>
 <li>Everyone starts with 400 coins and a few starter cards.</li>
 </ul>
 </div>
@@ -432,19 +433,11 @@ animation: pulseText 1.6s ease-in-out infinite;
 </div>
 
 <div class="section">
-<strong>Controls</strong>
-<ul>
-<li><span class="kbd">Click</span> a card to select.</li>
-<li><span class="kbd">Click</span> on your half of the arena to place.</li>
-</ul>
-</div>
-
-<div class="section">
 <strong>Levels</strong>
 <ul>
 <li>Cards start at <b>Lv 1</b> (max <b>Lv 15</b>).</li>
 <li>Use coins to upgrade in your Deck. Costs scale: 100 × current level.</li>
-<li>Each level gives ~<b>+8%</b> HP & damage. Levels are saved to your account.</li>
+<li>Each level gives ~<b>+8%</b> HP & damage (spells: damage scales).</li>
 </ul>
 </div>
 </aside>
@@ -487,10 +480,11 @@ animation: pulseText 1.6s ease-in-out infinite;
 <li>Tower AI that shoots back; health bars on towers &amp; units.</li>
 <li>Strict 1v1 matchmaking with multiple simultaneous rooms.</li>
 <li>Elixir bar (10 segments, +1 per 2s), 5s card cooldown after use.</li>
-<li>Shop with 24 characters; +100 coins &amp; +5 trophies on win.</li>
+<li>Shop with 24+ characters &amp; spells; +100 coins &amp; +5 trophies on win.</li>
 <li>Rejoin after refresh; rooms auto-clean when both players leave.</li>
-<li>Player names shown by king castles; placement only on your half.</li>
-<li>NEW: Character Levels (1–15), Upgrade with coins, saved to Firebase.</li>
+<li>Player names shown by king castles; placement only on your half (spells anywhere).</li>
+<li>NEW: Spells (Fireball, Arrows), unit-vs-unit priority, softer tower damage, Skeleton Army spawns a swarm.</li>
+<li>Levels: cards &amp; spells up to Lv 15; upgrades cost coins and persist.</li>
 </ul>
 <div id="changelogHint">Click × to close</div>
 </div>
@@ -600,8 +594,9 @@ document.getElementById("onlineCount").innerText = "Online: "+online;
 // Presence flags
 playerRef.onDisconnect().update({ online:false, disconnected:true });
 
-/************ Cards (24 total) ************/
+/************ Cards (24+ total) ************/
 const allCards = [
+/* Troops */
 {name:"Knight",hp:200,maxHp:200,dmg:20,range:25,cost:3,speed:2,img:"https://img.icons8.com/color/96/knight.png", price:0},
 {name:"Archer",hp:120,maxHp:120,dmg:15,range:120,cost:3,speed:2,img:"https://img.icons8.com/color/96/bow.png", price:0},
 {name:"Golem",hp:400,maxHp:400,dmg:30,range:25,cost:6,speed:1,img:"https://img.icons8.com/color/96/rock.png", price:0},
@@ -627,7 +622,11 @@ const allCards = [
 {name:"Witch",hp:160,maxHp:160,dmg:25,range:180,cost:5,speed:2,img:"https://img.icons8.com/color/96/witch.png", price:500},
 {name:"Bowler",hp:300,maxHp:300,dmg:35,range:150,cost:6,speed:2,img:"https://img.icons8.com/color/96/bowling-ball.png", price:600},
 {name:"Hunter",hp:200,maxHp:200,dmg:50,range:100,cost:4,speed:3,img:"https://img.icons8.com/color/96/shotgun.png", price:500},
-{name:"Mega Minion",hp:140,maxHp:140,dmg:30,range:50,cost:3,speed:3,img:"https://img.icons8.com/color/96/minion.png", price:350}
+{name:"Mega Minion",hp:140,maxHp:140,dmg:30,range:50,cost:3,speed:3,img:"https://img.icons8.com/color/96/minion.png", price:350},
+
+/* Spells */
+{name:"Fireball", type:"spell", dmg:180, radius:70, cost:4, img:"https://img.icons8.com/color/96/fireball.png", price:450},
+{name:"Arrows",   type:"spell", dmg:90,  radius:120, cost:3, img:"https://img.icons8.com/color/96/archers-bow.png", price:350}
 ];
 
 /************ Levels ************/
@@ -900,9 +899,13 @@ selectedCard=card;
 document.querySelectorAll("#cardBar .card").forEach(c=>c.classList.remove("selected"));
 d.classList.add("selected");
 let y=lastMouse.y;
-if(mySide==="blue" && y<canvas.height/2) y=canvas.height/2;
-if(mySide==="red"  && y>canvas.height/2) y=canvas.height/2;
-placementCircle={x:lastMouse.x, y};
+if(selectedCard && selectedCard.type==="spell"){
+  placementCircle={x:lastMouse.x, y:lastMouse.y}; // anywhere
+}else{
+  if(mySide==="blue" && y<canvas.height/2) y=canvas.height/2;
+  if(mySide==="red"  && y>canvas.height/2) y=canvas.height/2;
+  placementCircle={x:lastMouse.x, y};
+}
 };
 bar.appendChild(d);
 });
@@ -928,7 +931,11 @@ const r=canvas.getBoundingClientRect();
 lastMouse.x = e.clientX - r.left;
 lastMouse.y = e.clientY - r.top;
 if(!selectedCard){ placementCircle=null; return; }
-placementCircle = clampToHalf(lastMouse.x, lastMouse.y);
+if(selectedCard.type==="spell"){
+  placementCircle = {x:lastMouse.x, y:lastMouse.y}; // anywhere
+}else{
+  placementCircle = clampToHalf(lastMouse.x, lastMouse.y);
+}
 });
 
 // Drop card → push action
@@ -937,16 +944,26 @@ if(!battleReady) return;
 if(!selectedCard) return;
 const rect=canvas.getBoundingClientRect();
 let x=e.clientX-rect.left, y=e.clientY-rect.top;
-({x,y}=clampToHalf(x,y));
-if(elixir < selectedCard.cost) return;
 
-elixir -= selectedCard.cost;
-cardCooldowns[selectedCard.name]=Date.now()+5000;
-refreshCooldownStyles();
-
-db.ref("rooms/"+roomId+"/actions").push({
-player:playerId, card:selectedCard, x, y, timestamp:Date.now()
-});
+if(selectedCard.type==="spell"){
+  // spells: may target anywhere
+  if(elixir < selectedCard.cost) return;
+  elixir -= selectedCard.cost;
+  cardCooldowns[selectedCard.name]=Date.now()+5000;
+  refreshCooldownStyles();
+  db.ref("rooms/"+roomId+"/actions").push({
+    player:playerId, card:selectedCard, x, y, timestamp:Date.now()
+  });
+} else {
+  ({x,y}=clampToHalf(x,y));
+  if(elixir < selectedCard.cost) return;
+  elixir -= selectedCard.cost;
+  cardCooldowns[selectedCard.name]=Date.now()+5000;
+  refreshCooldownStyles();
+  db.ref("rooms/"+roomId+"/actions").push({
+    player:playerId, card:selectedCard, x, y, timestamp:Date.now()
+  });
+}
 
 selectedCard=null; placementCircle=null;
 document.querySelectorAll("#cardBar .card").forEach(c=>c.classList.remove("selected"));
@@ -1013,6 +1030,19 @@ const a=BRIDGE_CENTERS[0], b=BRIDGE_CENTERS[1];
 return (Math.abs(x-a) <= Math.abs(x-b)) ? a : b;
 }
 
+// PRIORITY: nearest enemy unit first; otherwise nearest enemy tower
+function nearestEnemyUnit(u, maxR=9999){
+  let best=null, bestD2=Infinity;
+  const r2 = maxR*maxR;
+  for(const v of units){
+    if(v.side===u.side || v.hp<=0 || v===u) continue;
+    const dx=v.x - u.x, dy=v.y - u.y;
+    const d2 = dx*dx + dy*dy;
+    if(d2 <= r2 && d2 < bestD2){ best=v; bestD2=d2; }
+  }
+  return best;
+}
+
 function nearestEnemyTower(u){
 let best=null, bestD2=Infinity;
 for(const t of towers){
@@ -1024,24 +1054,81 @@ if(d2 < bestD2){ best=t; bestD2=d2; }
 return best;
 }
 
-function spawnUnit(card, side, x, y, ownerId){
-const lvl = (roomLevelsCache[ownerId] && roomLevelsCache[ownerId][card.name]) || 1;
-const mult = levelMultiplier(lvl);
+function spawnSkeletonHorde(side, x, y, ownerId, baseCard){
+  // 12 skeletons in a ring
+  const lvl = (roomLevelsCache[ownerId] && roomLevelsCache[ownerId][baseCard.name]) || 1;
+  const mult = levelMultiplier(lvl);
+  const count = 12;
+  const radius = 26;
+  for(let i=0;i<count;i++){
+    const ang = (i / count) * Math.PI*2;
+    const sx = x + Math.cos(ang)*radius;
+    const sy = y + Math.sin(ang)*radius;
+    units.push({
+      name:"Skeleton",
+      hp: Math.max(1, Math.floor(baseCard.hp * 0.7 * mult)),
+      maxHp: Math.max(1, Math.floor(baseCard.maxHp * 0.7 * mult)),
+      dmg: Math.max(1, Math.floor(baseCard.dmg * 0.9 * mult)),
+      range: 20,
+      speed: Math.max(0.6, baseCard.speed*0.9),
+      side, x:sx, y:sy, cooldown:0, dir:(side==="blue" ? -1 : 1),
+      pathStage:'toBridge', targetX: pickNearestBridgeX(x), targetY: (side==='blue' ? (RIVER_Y + RIVER_H + 8) : (RIVER_Y - 8)),
+      goal: null, level: lvl
+    });
+  }
+}
 
-const slowFactor = 0.30; // slower
-const speed = Math.max(0.35, card.speed * slowFactor);
-const bridgeX = pickNearestBridgeX(x);
-const startTargetY = side==='blue' ? (RIVER_Y + RIVER_H + 8) : (RIVER_Y - 8);
-units.push({
-name:card.name,
-hp: Math.floor(card.hp * mult),
-maxHp: Math.floor(card.maxHp * mult),
-dmg: Math.max(1, Math.floor(card.dmg * mult)),
-range: card.range,
-speed, side, x, y, cooldown:0, dir:(side==="blue" ? -1 : 1),
-pathStage:'toBridge', targetX: bridgeX, targetY: startTargetY,
-goal: null, level: lvl
-});
+function spawnUnit(card, side, x, y, ownerId){
+  // Spells are handled elsewhere
+  if(card.type==="spell") return;
+
+  if(card.name==="Skeleton Army"){
+    return spawnSkeletonHorde(side, x, y, ownerId, card);
+  }
+
+  const lvl = (roomLevelsCache[ownerId] && roomLevelsCache[ownerId][card.name]) || 1;
+  const mult = levelMultiplier(lvl);
+
+  const slowFactor = 0.30; // slower
+  const speed = Math.max(0.35, card.speed * slowFactor);
+  const bridgeX = pickNearestBridgeX(x);
+  const startTargetY = side==='blue' ? (RIVER_Y + RIVER_H + 8) : (RIVER_Y - 8);
+  units.push({
+    name:card.name,
+    hp: Math.floor(card.hp * mult),
+    maxHp: Math.floor(card.maxHp * mult),
+    dmg: Math.max(1, Math.floor(card.dmg * mult)),
+    range: card.range,
+    speed, side, x, y, cooldown:0, dir:(side==="blue" ? -1 : 1),
+    pathStage:'toBridge', targetX: bridgeX, targetY: startTargetY,
+    goal: null, level: lvl
+  });
+}
+
+// Spells: Fireball, Arrows (AOE). Towers take reduced damage from spells.
+function castSpell(card, side, x, y, ownerId){
+  const lvl = (roomLevelsCache[ownerId] && roomLevelsCache[ownerId][card.name]) || 1;
+  const mult = levelMultiplier(lvl);
+  const dmg = Math.floor((card.dmg||0) * mult);
+  const rad = card.radius || 80;
+
+  // Damage enemy units in radius
+  for(const u of units){
+    if(u.side===side || u.hp<=0) continue;
+    const dx=u.x-x, dy=u.y-y;
+    if(dx*dx+dy*dy <= rad*rad){
+      u.hp -= dmg;
+    }
+  }
+  // Damage towers less (35% of spell dmg)
+  const towerDmg = Math.floor(dmg * 0.35);
+  for(const t of towers){
+    if(t.side===side || t.hp<=0) continue;
+    const dx=t.x-x, dy=t.y-y;
+    if(dx*dx+dy*dy <= (rad+25)*(rad+25)){
+      t.hp -= towerDmg;
+    }
+  }
 }
 
 function moveTowards(u, tx, ty){
@@ -1063,28 +1150,49 @@ u.targetY = (u.side==='blue') ? (RIVER_Y - 8) : (RIVER_Y + RIVER_H + 8);
 return;
 }
 if(u.pathStage==='crossing'){
+// While crossing, still react to enemies in range
+const enemyClose = nearestEnemyUnit(u, Math.max(140, u.range||25) + 40);
+if(enemyClose){
+  const dx=enemyClose.x - u.x, dy=enemyClose.y - u.y;
+  const dist = Math.hypot(dx,dy);
+  const attackRange = Math.max(20, u.range||25);
+  if(dist <= attackRange){
+    if(u.cooldown<=0){
+      enemyClose.hp -= u.dmg;
+      u.cooldown = 30;
+    }
+  } else {
+    moveTowards(u, enemyClose.x, enemyClose.y);
+  }
+  if(u.cooldown>0) u.cooldown--;
+  return;
+}
+
 if(moveTowards(u, u.targetX, u.targetY)){
 u.pathStage='toTarget';
 }
 return;
 }
 
-if(!u.goal || u.goal.hp<=0){
-u.goal = nearestEnemyTower(u);
+// MAIN COMBAT AI (prioritize enemy units)
+let target = nearestEnemyUnit(u, 9999);
+if(!target || target.hp<=0){
+  target = nearestEnemyTower(u);
 }
-if(!u.goal){ return; }
+if(!target){ return; }
 
-const dx=u.goal.x - u.x, dy=u.goal.y - u.y;
+const dx=target.x - u.x, dy=target.y - u.y;
 const dist = Math.hypot(dx,dy);
 const attackRange = Math.max(20, u.range||25);
 
 if(dist <= attackRange){
 if(u.cooldown<=0){
-u.goal.hp -= u.dmg;
+target.hp -= u.dmg;
 u.cooldown = 30; // ~0.5s
 }
 } else {
-moveTowards(u, u.goal.x, u.goal.y);
+// move toward chosen target
+moveTowards(u, target.x, target.y);
 }
 
 if(u.cooldown>0) u.cooldown--;
@@ -1093,7 +1201,7 @@ if(u.cooldown>0) u.cooldown--;
 units = units.filter(u=>u.hp>0);
 }
 
-/* Tower AI */
+/* Tower AI (slightly reduced damage) */
 function updateTowersAI(){
 towers.forEach(t=>{
 if(t.hp<=0) return;
@@ -1113,7 +1221,7 @@ const speed=7;
 const dx=best.x - t.x, dy=best.y - t.y;
 const mag=Math.max(0.001, Math.hypot(dx,dy));
 const vx=speed*dx/mag, vy=speed*dy/mag;
-projectiles.push({x:t.x, y:t.y, vx, vy, dmg:(t.dmg|| (t.king?35:22)), side:t.side});
+projectiles.push({x:t.x, y:t.y, vx, vy, dmg:(t.dmg|| (t.king?26:16)), side:t.side});
 t.cd = t.cdMax || 60;
 }
 });
@@ -1172,8 +1280,11 @@ if(pendingActionKeys.has(key)) return;
 pendingActionKeys.add(key);
 const a=snap.val();
 const side = (a.player===playerId) ? mySide : (mySide==="blue"?"red":"blue");
-// pass owner id for leveled spawn
-spawnUnit(a.card, side, a.x, a.y, a.player);
+if(a.card && a.card.type==="spell"){
+  castSpell(a.card, side, a.x, a.y, a.player);
+}else{
+  spawnUnit(a.card, side, a.x, a.y, a.player);
+}
 });
 }
 function attachClientStateListener(){
@@ -1325,14 +1436,14 @@ preloadLevelsForRoom(); // <-- load per-player levels for the match
 elixir=5; lastElixirTime=Date.now(); initElixirBar();
 
 towers=[
-// Blue
-{x:200,y:560,hp:600,side:"blue",king:false, range:200, dmg:22, cdMax:60},
-{x:600,y:560,hp:600,side:"blue",king:false, range:200, dmg:22, cdMax:60},
-{x:400,y:640,hp:1000,side:"blue",king:true,  range:250, dmg:35, cdMax:60},
+// Blue (reduced dmg)
+{x:200,y:560,hp:600,side:"blue",king:false, range:200, dmg:16, cdMax:60},
+{x:600,y:560,hp:600,side:"blue",king:false, range:200, dmg:16, cdMax:60},
+{x:400,y:640,hp:1000,side:"blue",king:true,  range:250, dmg:26, cdMax:60},
 // Red
-{x:200,y:140,hp:600,side:"red",king:false, range:200, dmg:22, cdMax:60},
-{x:600,y:140,hp:600,side:"red",king:false, range:200, dmg:22, cdMax:60},
-{x:400,y:60, hp:1000,side:"red",king:true,  range:250, dmg:35, cdMax:60}
+{x:200,y:140,hp:600,side:"red",king:false, range:200, dmg:16, cdMax:60},
+{x:600,y:140,hp:600,side:"red",king:false, range:200, dmg:16, cdMax:60},
+{x:400,y:60, hp:1000,side:"red",king:true,  range:250, dmg:26, cdMax:60}
 ];
 units=[]; projectiles=[]; gameOver=false; selectedCard=null; placementCircle=null; battleReady=false;
 pendingActionKeys.clear();
@@ -1476,71 +1587,6 @@ tryPlayBgm(); // start music after user gesture
 };
 overlay.addEventListener('click', hide);
 }
-})();
-</script>
-  <script>
-/* === Top Bar Fix (pin to top + move ads below it) === */
-(function(){
-  function applyFix(){
-    var topBar = document.querySelector('.top-bar');
-    if(!topBar) return;
-
-    // 1) Create/attach CSS overrides
-    var css = `
-      :root{ --top-h: ${Math.max(56, Math.round(topBar.getBoundingClientRect().height||56))}px; }
-      .top-bar{
-        position: fixed !important;
-        top: 0; left: 0; right: 0;
-        height: var(--top-h);
-        z-index: 1000;
-      }
-      .screen{
-        height: calc(100vh - var(--top-h)) !important;
-        margin-top: var(--top-h) !important;
-        position: relative;
-      }
-    `;
-    var style = document.getElementById('topbar-fix-style');
-    if(!style){
-      style = document.createElement('style');
-      style.id = 'topbar-fix-style';
-      document.head.appendChild(style);
-    }
-    style.textContent = css;
-
-    // 2) Move any AdSense <ins class="adsbygoogle"> that sits before the top bar
-    var ads = Array.from(document.querySelectorAll('ins.adsbygoogle'));
-    ads.forEach(function(ad){
-      if(!ad || !ad.parentNode) return;
-      // If ad appears earlier than topBar in document order, move it just after the bar
-      var isBefore = !!(ad.compareDocumentPosition(topBar) & Node.DOCUMENT_POSITION_FOLLOWING);
-      if(isBefore){
-        topBar.insertAdjacentElement('afterend', ad);
-        // If it hasn't initialized yet, push it
-        try{
-          if(!ad.getAttribute('data-adsbygoogle-status')){
-            (window.adsbygoogle = window.adsbygoogle || []).push({});
-          }
-        }catch(e){}
-      }
-    });
-  }
-
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', applyFix);
-  } else {
-    applyFix();
-  }
-
-  // In case fonts/styles load and change height slightly, re-measure once
-  window.addEventListener('load', function(){
-    var topBar = document.querySelector('.top-bar');
-    if(!topBar) return;
-    var style = document.getElementById('topbar-fix-style');
-    if(!style) return;
-    var h = Math.max(56, Math.round(topBar.getBoundingClientRect().height||56));
-    style.textContent = style.textContent.replace(/--top-h:\s*[^;]+;/, '--top-h: '+h+'px;');
-  });
 })();
 </script>
 </body>
