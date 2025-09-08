@@ -1478,5 +1478,70 @@ overlay.addEventListener('click', hide);
 }
 })();
 </script>
+  <script>
+/* === Top Bar Fix (pin to top + move ads below it) === */
+(function(){
+  function applyFix(){
+    var topBar = document.querySelector('.top-bar');
+    if(!topBar) return;
+
+    // 1) Create/attach CSS overrides
+    var css = `
+      :root{ --top-h: ${Math.max(56, Math.round(topBar.getBoundingClientRect().height||56))}px; }
+      .top-bar{
+        position: fixed !important;
+        top: 0; left: 0; right: 0;
+        height: var(--top-h);
+        z-index: 1000;
+      }
+      .screen{
+        height: calc(100vh - var(--top-h)) !important;
+        margin-top: var(--top-h) !important;
+        position: relative;
+      }
+    `;
+    var style = document.getElementById('topbar-fix-style');
+    if(!style){
+      style = document.createElement('style');
+      style.id = 'topbar-fix-style';
+      document.head.appendChild(style);
+    }
+    style.textContent = css;
+
+    // 2) Move any AdSense <ins class="adsbygoogle"> that sits before the top bar
+    var ads = Array.from(document.querySelectorAll('ins.adsbygoogle'));
+    ads.forEach(function(ad){
+      if(!ad || !ad.parentNode) return;
+      // If ad appears earlier than topBar in document order, move it just after the bar
+      var isBefore = !!(ad.compareDocumentPosition(topBar) & Node.DOCUMENT_POSITION_FOLLOWING);
+      if(isBefore){
+        topBar.insertAdjacentElement('afterend', ad);
+        // If it hasn't initialized yet, push it
+        try{
+          if(!ad.getAttribute('data-adsbygoogle-status')){
+            (window.adsbygoogle = window.adsbygoogle || []).push({});
+          }
+        }catch(e){}
+      }
+    });
+  }
+
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', applyFix);
+  } else {
+    applyFix();
+  }
+
+  // In case fonts/styles load and change height slightly, re-measure once
+  window.addEventListener('load', function(){
+    var topBar = document.querySelector('.top-bar');
+    if(!topBar) return;
+    var style = document.getElementById('topbar-fix-style');
+    if(!style) return;
+    var h = Math.max(56, Math.round(topBar.getBoundingClientRect().height||56));
+    style.textContent = style.textContent.replace(/--top-h:\s*[^;]+;/, '--top-h: '+h+'px;');
+  });
+})();
+</script>
 </body>
 </html>
