@@ -273,6 +273,18 @@ animation: pulseText 1.6s ease-in-out infinite;
 <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
 </head>
 <body>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6444487225655573"
+     crossorigin="anonymous"></script>
+<!-- VERT -->
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-6444487225655573"
+     data-ad-slot="4380078490"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+<script>
+     (adsbygoogle = window.adsbygoogle || []).push({});
+</script>
 <!-- Background music (loop) — ADDED -->
 <audio id="bgm" src="mixkit-the-boss-479.mp3" loop preload="auto" playsinline></audio>
 
@@ -368,8 +380,7 @@ animation: pulseText 1.6s ease-in-out infinite;
 <strong>Placing Units</strong>
 <ul>
 <li>Click a card in your hand, then click anywhere on <em>your half</em> of the arena. A white circle follows your cursor before placing.</li>
-          <li>Units automatically head to the nearest bridge, cross, then target enemy towers. They stop walking while attacking.</li>
-          <li><b>Units fight enemy troops first.</b> If no enemies are nearby, they head to the nearest bridge, cross, then push toward enemy towers.</li>
+<li>Units automatically head to the nearest bridge, cross, then target enemy towers. They stop walking while attacking.</li>
 <li>Both players see each other’s placements and damage in real time.</li>
 </ul>
 </div>
@@ -452,10 +463,8 @@ animation: pulseText 1.6s ease-in-out infinite;
 <h3 id="changelogTitle">What’s new in Flash Royale</h3>
 <ul id="changelogList">
 <li>Scripted and brought to you by Chace, enjoy!</li>
-        <li>The new season pass was breaking the game so we have to stay on a old version while we test..</li>
-        <li>Tower AI that shoots back; health bars on towers &amp; units.</li>
-        <li><b>NEW:</b> Units now target and fight enemy troops before going for towers.</li>
-        <li>Units cross bridges; tower AI shoots back; health bars on towers &amp; units.</li>
+<li>Units cross bridges, then target enemy towers, stopping to attack in range.</li>
+<li>Tower AI that shoots back; health bars on towers &amp; units.</li>
 <li>Strict 1v1 matchmaking with multiple simultaneous rooms.</li>
 <li>Elixir bar (10 segments, +1 per 2s), 5s card cooldown after use.</li>
 <li>Shop with 24 characters; +100 coins &amp; +5 trophies on win.</li>
@@ -915,20 +924,6 @@ if(d2 < bestD2){ best=t; bestD2=d2; }
 return best;
 }
 
-    /* NEW: find nearest enemy unit (within radius) */
-    function nearestEnemyUnit(u, radius){
-      let best=null, bestD2=radius*radius;
-      for(const other of units){
-        if(other===u) continue;
-        if(other.side===u.side) continue;
-        if(other.hp<=0) continue;
-        const dx=other.x - u.x, dy=other.y - u.y;
-        const d2 = dx*dx + dy*dy;
-        if(d2 <= bestD2){ best=other; bestD2=d2; }
-      }
-      return best;
-    }
-
 function spawnUnit(card, side, x, y){
 const slowFactor = 0.30; // slower
 const speed = Math.max(0.35, card.speed * slowFactor);
@@ -938,9 +933,7 @@ units.push({
 name:card.name, hp:card.hp, maxHp:card.maxHp, dmg:card.dmg, range:card.range,
 speed, side, x, y, cooldown:0, dir:(side==="blue" ? -1 : 1),
 pathStage:'toBridge', targetX: bridgeX, targetY: startTargetY,
-        goal: null
-        goal: null,           // tower target (fallback)
-        goalUnit: null        // NEW: enemy unit target (preferred)
+goal: null
 });
 }
 
@@ -953,76 +946,33 @@ u.y += u.speed * dy/dist;
 return false;
 }
 
-    /* UPDATED: units fight units first, then towers */
 function updateUnits(){
-      const AGGRO_PAD = 20; // detection a bit larger than attack range
-      const DROP_MULT = 1.3; // how far a locked target can wander before we drop it
-
 units.forEach(u=>{
-        const attackRange = Math.max(20, u.range||25);
-        const detectRange = attackRange + AGGRO_PAD;
-
-        // Maintain or acquire a unit target
-        if(u.goalUnit && u.goalUnit.hp>0){
-          // If target wandered too far, drop it
-          const dx=u.goalUnit.x-u.x, dy=u.goalUnit.y-u.y;
-          const d=Math.hypot(dx,dy);
-          if(d > detectRange*DROP_MULT){
-            u.goalUnit = null;
-          }
-        }
-        if(!u.goalUnit){
-          u.goalUnit = nearestEnemyUnit(u, detectRange) || null;
-        }
-
-        // If we have a unit target, prioritize fighting it
-        if(u.goalUnit){
-          const dx=u.goalUnit.x-u.x, dy=u.goalUnit.y-u.y;
-          const d=Math.hypot(dx,dy);
-          if(d <= attackRange){
-            if(u.cooldown<=0 && u.dmg>0){
-              u.goalUnit.hp -= u.dmg;
-              u.cooldown = 30; // ~0.5s
-              if(u.goalUnit.hp<=0){ u.goalUnit=null; }
-            }
-          }else{
-            moveTowards(u, u.goalUnit.x, u.goalUnit.y);
-          }
-          if(u.cooldown>0) u.cooldown--;
-          return; // skip tower logic while engaged with a unit
-        }
-
-        // === ORIGINAL PATHING / TOWER TARGETING ===
 if(u.pathStage==='toBridge'){
 if(moveTowards(u, u.targetX, u.targetY)){
 u.pathStage='crossing';
 u.targetY = (u.side==='blue') ? (RIVER_Y - 8) : (RIVER_Y + RIVER_H + 8);
 }
-          if(u.cooldown>0) u.cooldown--;
 return;
 }
 if(u.pathStage==='crossing'){
 if(moveTowards(u, u.targetX, u.targetY)){
 u.pathStage='toTarget';
 }
-          if(u.cooldown>0) u.cooldown--;
 return;
 }
 
-        // Choose/refresh tower goal
 if(!u.goal || u.goal.hp<=0){
 u.goal = nearestEnemyTower(u);
 }
-        if(!u.goal){ return; }
-        if(!u.goal){ if(u.cooldown>0) u.cooldown--; return; }
+if(!u.goal){ return; }
 
 const dx=u.goal.x - u.x, dy=u.goal.y - u.y;
 const dist = Math.hypot(dx,dy);
-        const attackRange = Math.max(20, u.range||25);
+const attackRange = Math.max(20, u.range||25);
 
 if(dist <= attackRange){
-          if(u.cooldown<=0){
-          if(u.cooldown<=0 && u.dmg>0){
+if(u.cooldown<=0){
 u.goal.hp -= u.dmg;
 u.cooldown = 30; // ~0.5s
 }
@@ -1033,7 +983,6 @@ moveTowards(u, u.goal.x, u.goal.y);
 if(u.cooldown>0) u.cooldown--;
 });
 
-      // Clean up dead dudes
 units = units.filter(u=>u.hp>0);
 }
 
