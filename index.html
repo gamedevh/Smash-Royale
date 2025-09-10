@@ -1,4 +1,5 @@
-<!DOCTYPE html>
+# Write the patched HTML into a file for download
+patched_html = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6444487225655573"
@@ -755,6 +756,37 @@ setInterval(updateElixir, 200);
 let roomId=null, mySide=null, searching=false, battleReady=false, isHost=false, hostId=null;
 let roomRef=null, actionsRef=null, stateRef=null, roomPlayersRef=null, queueAdded=false, pairInterval=null;
 
+/************ Room Sweeper (cleans orphaned rooms that include me) ************/
+(function(){
+  const roomsRef = db.ref("rooms");
+
+  function considerClean(snap){
+    const r = snap.val(); 
+    if(!r || !r.players) return;
+    // Only touch rooms that include ME (safer with permissive rules)
+    if(!r.players[playerId]) return;
+
+    const created = (typeof r.createdAt === 'number') ? r.createdAt : 0;
+    const ageMs = Date.now() - created;
+    const players = r.players || {};
+    const anyConnected = Object.values(players).some(p => p && p.connected);
+    const anyJoined   = Object.values(players).some(p => p && p.joinedAt);
+
+    // If nobody is connected AND nobody ever joined after ~20s, it’s a ghost room -> remove.
+    if(!anyConnected && !anyJoined && ageMs > 20000){
+      db.ref("rooms/"+snap.key).remove();
+      return;
+    }
+    // If state ended, backstop removal in case no client is around.
+    if(r.state === "ended" && ageMs > 20000){
+      db.ref("rooms/"+snap.key).remove();
+    }
+  }
+
+  roomsRef.on("child_added",   considerClean);
+  roomsRef.on("child_changed", considerClean);
+})();
+
 function findMatch(){
 document.getElementById("statusText").innerText="Searching...";
 document.getElementById("battleBtn").style.display="none";
@@ -809,8 +841,8 @@ createdAt: firebase.database.ServerValue.TIMESTAMP,
 state:"active",
 host: playerId,
 players:{
-[playerId]:{connected:true,side:"blue",name:playerName},
-[cand]:{connected:true,side:"red",name:oppName}
+[playerId]:{connected:false, side:"blue", name:playerName, joinedAt: null},
+[cand]:{connected:false, side:"red",  name:oppName,    joinedAt: null}
 }
 };
 db.ref("rooms/"+roomId).set(roomData).then(()=>{
@@ -1243,15 +1275,30 @@ if(p.x<-20||p.x>canvas.width+20||p.y<-20||p.y>canvas.height+20) p.dead=true;
 projectiles = projectiles.filter(p=>!p.dead);
 }
 
+/* === Rewards: idempotent claim so non-host also gets paid === */
+function tryGrantWinRewards(winner){
+  if(!roomRef || !roomId) return;
+  const iWon = (winner === "Blue" && mySide === "blue") || (winner === "Red" && mySide === "red");
+  if(!iWon) return;
+
+  const claimRef = roomRef.child("rewarded/"+playerId);
+  claimRef.transaction(v => v || firebase.database.ServerValue.TIMESTAMP, function(err, committed){
+    if(err || !committed) return; // already claimed or error
+    // Pay once on successful claim
+    playerRef.child("coins").transaction(c => (c||0) + 100);
+    playerRef.child("trophies").transaction(t => (t||0) + 5);
+  });
+}
+
 function endGame(winnerColor){
 if(gameOver) return; gameOver=true;
 roomRef.child("state").set("ended");
 roomRef.child("winner").set(winnerColor);
+
+// Ensure winner gets paid exactly once (host or not)
+tryGrantWinRewards(winnerColor);
+
 const iWon = (winnerColor==="Blue" && mySide==="blue") || (winnerColor==="Red" && mySide==="red");
-if(iWon){
-playerRef.child("coins").transaction(c=>(c||0)+100);
-playerRef.child("trophies").transaction(t=>(t||0)+5);
-}
 document.getElementById("resultText").innerText = iWon ? "🏆 Victory!" : "❌ Defeat";
 document.getElementById("rewardText").innerText = iWon ? "+100 Coins, +5 Trophies" : "Better luck next time!";
 document.getElementById("resultScreen").style.display="block";
@@ -1406,7 +1453,12 @@ attachClientStateListener();
 }
 });
 
-roomRef.child("players/"+playerId).update({connected:true, side:mySide, name:playerName});
+roomRef.child("players/"+playerId).update({
+  connected:true, 
+  side:mySide, 
+  name:playerName,
+  joinedAt: firebase.database.ServerValue.TIMESTAMP
+});
 roomRef.child("players/"+playerId).onDisconnect().update({connected:false, lastSeen: firebase.database.ServerValue.TIMESTAMP});
 
 roomPlayersRef.once("value").then(s=>{
@@ -1459,6 +1511,10 @@ setupRoomAutoCleanup();
 
 roomRef.child("winner").on("value", snap=>{
 const w=snap.val(); if(!w || gameOver) return;
+
+// ensure winner client gets paid even if not host
+tryGrantWinRewards(w);
+
 const iWon = (w==="Blue" && mySide==="blue") || (w==="Red" && mySide==="red");
 gameOver=true;
 document.getElementById("resultText").innerText = iWon ? "🏆 Victory!" : "❌ Defeat";
@@ -1657,3 +1713,7 @@ overlay.addEventListener('click', hide);
 
 </body>
 </html>
+"""
+with open('/mnt/data/flash-royale-patched.html', 'w', encoding='utf-8') as f:
+    f.write(patched_html)
+'/mnt/data/flash-royale-patched.html'
