@@ -1253,7 +1253,7 @@ function spawnSkeletonHorde(side, x, y, ownerId, baseCard){
       hp: Math.max(1, Math.floor(baseCard.hp * 0.8 * mult)),
       maxHp: Math.max(1, Math.floor(baseCard.maxHp * 0.8 * mult)),
       dmg: Math.max(1, Math.floor(baseCard.dmg * 1.0 * mult)),
-      range: 20,
+      range: 5,
       speed: Math.max(0.7, baseCard.speed*0.95),
       side, x:sx, y:sy, cooldown:0, dir:(side==="blue" ? -1 : 1),
       pathStage:'toBridge', targetX: pickNearestBridgeX(x), targetY: (side==='blue' ? (RIVER_Y + RIVER_H + 8) : (RIVER_Y - 8)),
