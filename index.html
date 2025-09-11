@@ -1502,7 +1502,7 @@ roomRef.child("state").set("ended");
 roomRef.child("winner").set(winnerColor);
 const iWon = (winnerColor==="Blue" && mySide==="blue") || (winnerColor==="Red" && mySide==="red");
 if(iWon){
-playerRef.child("coins").transaction(c=>(c||0)+100);
+playerRef.child("coins").transaction(c=>(c||0)+500);
 playerRef.child("trophies").transaction(t=>(t||0)+5);
 }
 document.getElementById("resultText").innerText = iWon ? "🏆 Victory!" : "❌ Defeat";
