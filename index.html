@@ -63,6 +63,13 @@ font-size:14px; font-weight:bold; border:2px solid #fff;
 .shop .buy-btn[disabled]{ opacity:.6; cursor:not-allowed; }
 .shop .owned{ margin-top:6px; padding:6px 10px; border-radius:8px; border:2px solid #888; background:#444; color:#aaa; }
 
+/* Deck selection UI (menu) */
+#deckSummary{ max-width:540px; margin:0 auto; text-align:left; }
+#deckSummary .slots{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+.slotChip{ padding:4px 8px; border-radius:10px; border:1px solid #94a3b8; background:#0b1220; font-size:12px; }
+.deck-toggle{ margin-top:6px; padding:6px 10px; border-radius:8px; border:2px solid #fff; background:#0ea5e9; color:#fff; cursor:pointer; }
+.deck-toggle.remove{ background:#ef4444; }
+
 /* === Card Levels & Upgrade === */
 .level-badge{
   position:absolute; top:5px; right:5px;
@@ -95,6 +102,23 @@ display:none; justify-content:space-between; padding:2px; z-index:5;
 }
 .elixir-segment{ flex:1; margin:0 1px; background:#444; border-radius:4px; }
 .elixir-filled{ background:purple; }
+
+/* Emotes */
+#emoteTray{
+position:fixed; left:20px; bottom:160px; display:none; gap:8px; z-index:6;
+}
+.emote-btn{ font-size:20px; border:2px solid #fff; background:#0b1220; border-radius:10px; padding:6px 8px; cursor:pointer; }
+.emote-btn:disabled{ opacity:.5; cursor:not-allowed; }
+.emote-bubble{
+position:fixed; font-size:28px; padding:6px 10px; border-radius:14px; background:rgba(0,0,0,0.5); border:2px solid #fff;
+transform:translate(-50%, -100%); pointer-events:none; z-index:7; animation: emotePop 1.3s ease-out forwards;
+}
+@keyframes emotePop{
+0%{ opacity:0; transform:translate(-50%,-80%) scale(0.8); }
+10%{ opacity:1; transform:translate(-50%,-100%) scale(1.0); }
+70%{ opacity:1; transform:translate(-50%,-125%) scale(1.0); }
+100%{ opacity:0; transform:translate(-50%,-140%) scale(1.0); }
+}
 
 /* Result overlay */
 #resultScreen{
@@ -363,6 +387,10 @@ animation: pulseText 1.6s ease-in-out infinite;
 <button id="cancelBtn" class="cancel-btn" onclick="cancelSearch()">Cancel</button>
 
 <h2>Your Deck</h2>
+<div id="deckSummary">
+  <div><b>Slots:</b> <span id="deckCount">0</span>/8</div>
+  <div class="slots" id="deckSlots"></div>
+</div>
 <div class="deck" id="deck"></div>
 
 <h2>Shop</h2>
@@ -400,7 +428,7 @@ animation: pulseText 1.6s ease-in-out infinite;
 <strong>Elixir & Cards</strong>
 <ul>
 <li>Elixir bar holds 10 segments; you gain +1 every 2 seconds (max 10).</li>
-<li>Cards cost elixir; if you don’t have enough, you can’t place them.</li>
+<li>Your battle hand shows 4 of your 8 deck cards; when you use one, it rotates to the back and the next card appears.</li>
 <li>Used cards have a 5s cooldown before you can select them again.</li>
 </ul>
 </div>
@@ -461,6 +489,12 @@ animation: pulseText 1.6s ease-in-out infinite;
 <!-- Battle UI -->
 <div id="cardBar"></div>
 <div id="elixirBar"></div>
+<div id="emoteTray" aria-label="Emotes">
+  <button class="emote-btn" data-emote="😀">😀</button>
+  <button class="emote-btn" data-emote="😡">😡</button>
+  <button class="emote-btn" data-emote="😭">😭</button>
+  <button class="emote-btn" data-emote="👍">👍</button>
+</div>
 
 <!-- Result -->
 <div id="resultScreen">
@@ -484,6 +518,8 @@ animation: pulseText 1.6s ease-in-out infinite;
 <li>Rejoin after refresh; rooms auto-clean when both players leave.</li>
 <li>Player names shown by king castles; placement only on your half (spells anywhere).</li>
 <li>NEW: Spells (Fireball, Arrows), unit-vs-unit priority, softer tower damage, Skeleton Army spawns a swarm.</li>
+<li>Deck system: choose 8 cards; battle hand shows 4 rotating cards.</li>
+<li>Emotes: send emotes during battles—both players see them.</li>
 <li>Levels: cards &amp; spells up to Lv 15; upgrades cost coins and persist.</li>
 </ul>
 <div id="changelogHint">Click × to close</div>
@@ -555,6 +591,20 @@ document.getElementById("playerNameLabel").innerText = playerName;
 
 const playerRef = db.ref("players/"+playerId);
 
+// Globals for deck/owned
+let playerOwned = {};
+let playerDeck = [];
+
+function ensureInitialDeck(owned){
+  const names = Object.keys(owned||{});
+  if(names.length===0) return [];
+  const initial = [];
+  for(let i=0;i<names.length && initial.length<8;i++){
+    initial.push(names[i]);
+  }
+  return initial;
+}
+
 // Initialize if missing; start with 400 coins
 playerRef.once("value").then(snap=>{
 if(!snap.exists()){
@@ -612,7 +662,7 @@ const allCards = [
 {name:"Dark Knight",hp:260,maxHp:260,dmg:35,range:30,cost:5,speed:3,img:"https://img.icons8.com/color/96/darth-vader.png", price:600},
 {name:"Healer",hp:150,maxHp:150,dmg:0,range:60,cost:4,speed:2,img:"https://img.icons8.com/color/96/angel.png", price:400},
 {name:"Bomber",hp:110,maxHp:110,dmg:45,range:60,cost:3,speed:2,img:"https://img.icons8.com/color/96/bomb.png", price:300},
-{name:"Skeleton Army",hp:50,maxHp:50,dmg:5,range:20,cost:3,speed:1,img:"https://img.icons8.com/color/96/skeleton.png", price:250},
+{name:"Skeleton Army",hp:50,maxHp:50,dmg:10,range:20,cost:3,speed:2,img:"https://img.icons8.com/color/96/skeleton.png", price:250},
 {name:"Valkyrie",hp:260,maxHp:260,dmg:40,range:25,cost:4,speed:2,img:"https://img.icons8.com/color/96/valkyrie.png", price:450},
 {name:"Hog Rider",hp:280,maxHp:280,dmg:55,range:25,cost:4,speed:4,img:"https://img.icons8.com/color/96/boar.png", price:500},
 {name:"Electro Spirit",hp:100,maxHp:100,dmg:20,range:60,cost:2,speed:4,img:"https://img.icons8.com/color/96/lightning-bolt.png", price:250},
@@ -648,15 +698,37 @@ playerRef.child("levels").on("value", (s)=>{
   });
 });
 
-/* Deck + Shop render */
+/* Deck + Shop render + Deck selection */
 function renderDeck(owned, coins){
+playerOwned = owned || {};
 const deckEl = document.getElementById("deck");
+const deckCountEl = document.getElementById("deckCount");
+const deckSlotsEl = document.getElementById("deckSlots");
+
+// Ensure deck exists
+if(!Array.isArray(playerDeck) || playerDeck.length===0){
+  const initial = ensureInitialDeck(playerOwned);
+  playerDeck = initial;
+  playerRef.child("deck").set(initial);
+}
+
+// summary
+deckCountEl.textContent = (playerDeck||[]).length;
+deckSlotsEl.innerHTML = "";
+(playerDeck||[]).forEach(n=>{
+  const chip = document.createElement("span");
+  chip.className="slotChip";
+  chip.textContent = n;
+  deckSlotsEl.appendChild(chip);
+});
+
 deckEl.innerHTML="";
 allCards.forEach(c=>{
-if(!owned || !owned[c.name]) return;
+if(!playerOwned || !playerOwned[c.name]) return;
 const lvl = Math.max(1, Math.min(MAX_LEVEL, (playerLevels && playerLevels[c.name]) || 1));
 const canLevel = lvl < MAX_LEVEL;
 const cost = canLevel ? upgradeCostFor(lvl) : 0;
+const inDeck = (playerDeck||[]).includes(c.name);
 
 const d=document.createElement("div");
 d.className="card";
@@ -670,6 +742,7 @@ d.innerHTML = `
     ? `<button class="upgrade-btn" data-name="${c.name}" ${ (coins>=cost) ? "" : "disabled" }>Upgrade (${cost}🪙)</button>`
     : `<div class="owned">Max Level</div>`
   }
+  <button class="deck-toggle ${inDeck?'remove':''}" data-name="${c.name}">${inDeck?'Remove from Deck':'Add to Deck'}</button>
 `;
 if(canLevel){
   const btn = d.querySelector(".upgrade-btn");
@@ -695,6 +768,24 @@ if(canLevel){
     });
   };
 }
+const tgl = d.querySelector(".deck-toggle");
+tgl.onclick = ()=>{
+  const name = c.name;
+  let deck = Array.isArray(playerDeck)? [...playerDeck] : [];
+  if(deck.includes(name)){
+    deck = deck.filter(n => n!==name);
+  }else{
+    if(deck.length >= 8){
+      alert("Deck is full. Remove a card first (max 8).");
+      return;
+    }
+    deck.push(name);
+  }
+  playerDeck = deck;
+  playerRef.child("deck").set(deck);
+  // re-render summary now
+  renderDeck(playerOwned, coins);
+};
 deckEl.appendChild(d);
 });
 }
@@ -727,6 +818,14 @@ return;
 playerRef.child("ownedCards/"+c.name).set(true);
 // ensure new purchases start at level 1
 playerRef.child("levels/"+c.name).transaction(lv => lv || 1);
+// auto-add to deck if space
+playerRef.child("deck").once("value").then(s=>{
+  let deck = s.val() || [];
+  if(Array.isArray(deck) && deck.length<8){
+    deck.push(c.name);
+    playerRef.child("deck").set(deck);
+  }
+});
 });
 };
 }
@@ -734,8 +833,15 @@ shop.appendChild(el);
 });
 }
 playerRef.on("value", s=>{
-const p=s.val()||{}; const owned=p.ownedCards||{};
-renderDeck(owned, p.coins||0); renderShop(owned, p.coins||0);
+const p=s.val()||{}; 
+const owned=p.ownedCards||{};
+playerOwned = owned;
+playerDeck = Array.isArray(p.deck) ? p.deck.filter(n => owned[n]) : ensureInitialDeck(owned);
+if(!Array.isArray(p.deck) || p.deck.length===0){
+  playerRef.child("deck").set(playerDeck);
+}
+renderDeck(owned, p.coins||0); 
+renderShop(owned, p.coins||0);
 });
 
 /************ Elixir ************/
@@ -901,6 +1007,18 @@ let pendingActionKeys=new Set();
 let lastPublishTime=0, PUBLISH_MS=100;
 let roomCleanupArmed=true;
 
+/* Deck rotation state (battle) */
+let deckQueue = []; // array of card objects in deck order
+let selectedHandIndex = null; // 0..3 index of current hand
+function buildDeckQueue(){
+  const names = (playerDeck && playerDeck.length) ? playerDeck.slice(0,8) : ensureInitialDeck(playerOwned);
+  const map = {};
+  allCards.forEach(c => map[c.name] = c);
+  const arr = [];
+  names.forEach(n => { if(map[n]) arr.push(map[n]); });
+  return arr;
+}
+
 /* === Levels cache for room (used by host when spawning) === */
 let roomLevelsCache = {}; // { playerId: {CardName: level} }
 async function preloadLevelsForRoom(){
@@ -914,31 +1032,33 @@ async function preloadLevelsForRoom(){
   }));
 }
 
-// Hand (owned cards)
-function renderHand(owned){
-const bar=document.getElementById("cardBar"); bar.innerHTML="";
-allCards.forEach(card=>{
-if(!owned[card.name]) return;
-const lvl = Math.max(1, Math.min(MAX_LEVEL, (playerLevels && playerLevels[card.name]) || 1));
-const d=document.createElement("div"); d.className="card";
-d.innerHTML=`<div class="elixir-cost">${card.cost}</div><div class="level-badge">Lv ${lvl}</div><img src="${card.img}"><b>${card.name}</b>`;
-const now=Date.now(); const cd=cardCooldowns[card.name]||0;
-if(cd>now) d.classList.add("cooldown");
-d.onclick=()=>{
-if((cardCooldowns[card.name]||0) > Date.now()) return;
-selectedCard=card;
-document.querySelectorAll("#cardBar .card").forEach(c=>c.classList.remove("selected"));
-d.classList.add("selected");
-let y=lastMouse.y;
-if(selectedCard && selectedCard.type==="spell"){
-  placementCircle={x:lastMouse.x, y:lastMouse.y}; // anywhere
-}else{
-  if(mySide==="blue" && y<canvas.height/2) y=canvas.height/2;
-  if(mySide==="red"  && y>canvas.height/2) y=canvas.height/2;
-  placementCircle={x:lastMouse.x, y};
-}
-};
-bar.appendChild(d);
+// Hand (battle, 4 rotating cards)
+function renderBattleHand(){
+const bar=document.getElementById("cardBar"); 
+bar.innerHTML="";
+const hand = deckQueue.slice(0,4);
+hand.forEach((card, idx)=>{
+  const lvl = Math.max(1, Math.min(MAX_LEVEL, (playerLevels && playerLevels[card.name]) || 1));
+  const d=document.createElement("div"); d.className="card";
+  d.innerHTML=`<div class="elixir-cost">${card.cost}</div><div class="level-badge">Lv ${lvl}</div><img src="${card.img}"><b>${card.name}</b>`;
+  const now=Date.now(); const cd=cardCooldowns[card.name]||0;
+  if(cd>now) d.classList.add("cooldown");
+  d.onclick=()=>{
+    if((cardCooldowns[card.name]||0) > Date.now()) return;
+    selectedCard=card;
+    selectedHandIndex = idx;
+    document.querySelectorAll("#cardBar .card").forEach(c=>c.classList.remove("selected"));
+    d.classList.add("selected");
+    let y=lastMouse.y;
+    if(selectedCard && selectedCard.type==="spell"){
+      placementCircle={x:lastMouse.x, y:lastMouse.y}; // anywhere
+    }else{
+      if(mySide==="blue" && y<canvas.height/2) y=canvas.height/2;
+      if(mySide==="red"  && y>canvas.height/2) y=canvas.height/2;
+      placementCircle={x:lastMouse.x, y};
+    }
+  };
+  bar.appendChild(d);
 });
 }
 function refreshCooldownStyles(){
@@ -969,16 +1089,18 @@ if(selectedCard.type==="spell"){
 }
 });
 
-// Drop card → push action
+// Drop card → push action + ROTATE
 canvas.addEventListener("click", e=>{
 if(!battleReady) return;
 if(!selectedCard) return;
 const rect=canvas.getBoundingClientRect();
 let x=e.clientX-rect.left, y=e.clientY-rect.top;
 
+// guard elixir
+if(elixir < selectedCard.cost) return;
+
 if(selectedCard.type==="spell"){
   // spells: may target anywhere
-  if(elixir < selectedCard.cost) return;
   elixir -= selectedCard.cost;
   cardCooldowns[selectedCard.name]=Date.now()+5000;
   refreshCooldownStyles();
@@ -987,7 +1109,6 @@ if(selectedCard.type==="spell"){
   });
 } else {
   ({x,y}=clampToHalf(x,y));
-  if(elixir < selectedCard.cost) return;
   elixir -= selectedCard.cost;
   cardCooldowns[selectedCard.name]=Date.now()+5000;
   refreshCooldownStyles();
@@ -996,8 +1117,15 @@ if(selectedCard.type==="spell"){
   });
 }
 
-selectedCard=null; placementCircle=null;
-document.querySelectorAll("#cardBar .card").forEach(c=>c.classList.remove("selected"));
+// ROTATION: move used hand card to end of queue, then re-render hand
+if(selectedHandIndex!=null){
+  const idx = selectedHandIndex;
+  // remove from its absolute position (idx relative to front)
+  const used = deckQueue.splice(idx,1)[0];
+  deckQueue.push(used);
+}
+selectedCard=null; placementCircle=null; selectedHandIndex=null;
+renderBattleHand();
 });
 
 /* Drawing helpers */
@@ -1380,6 +1508,36 @@ if(inactiveCleanupTimer){ clearTimeout(inactiveCleanupTimer); inactiveCleanupTim
 });
 }
 
+/* Emotes */
+let lastEmoteTime = 0;
+function sendEmote(code){
+  const now = Date.now();
+  if(now - lastEmoteTime < 1200) return; // rate limit
+  lastEmoteTime = now;
+  if(!roomRef) return;
+  roomRef.child("emotes").push({
+    player: playerId,
+    side: mySide,
+    code: code,
+    ts: firebase.database.ServerValue.TIMESTAMP
+  });
+}
+function showEmoteBubble(side, code){
+  // Find king tower position
+  const king = towers.find(t => t.king && t.side=== (side==="blue"?"blue":"red"));
+  const rect = canvas.getBoundingClientRect();
+  const x = king ? (rect.left + king.x) : (rect.left + canvas.width/2);
+  const y = king ? (rect.top + king.y)  : (rect.top + (side==="blue" ? canvas.height-60 : 60));
+
+  const b = document.createElement("div");
+  b.className = "emote-bubble";
+  b.textContent = code;
+  b.style.left = x + "px";
+  b.style.top  = y + "px";
+  document.body.appendChild(b);
+  setTimeout(()=>{ if(b && b.parentNode) b.parentNode.removeChild(b); }, 1400);
+}
+
 /* Main draw loop */
 function drawLoop(ts){
 drawArena();
@@ -1431,6 +1589,7 @@ document.getElementById("menuScreen").style.display="none";
 document.getElementById("battleScreen").style.display="block";
 document.getElementById("cardBar").style.display="flex";
 document.getElementById("elixirBar").style.display="flex";
+document.getElementById("emoteTray").style.display="flex";
 document.getElementById("statusText").innerText="In Battle (waiting for opponent…)";
 
 roomRef = db.ref("rooms/"+roomId);
@@ -1484,6 +1643,22 @@ roomRef.child("host").transaction(v => v || playerId);
 loadRoomNames();
 preloadLevelsForRoom(); // <-- load per-player levels for the match
 
+// build deck queue & initial hand
+deckQueue = buildDeckQueue();
+renderBattleHand();
+
+// Listen for emotes
+roomRef.child("emotes").limitToLast(30).on("child_added", snap=>{
+  const ev = snap.val() || {};
+  // Show for both; side is from sender
+  showEmoteBubble(ev.side || "blue", ev.code || "😀");
+});
+
+// Emote tray buttons
+document.querySelectorAll('#emoteTray .emote-btn').forEach(btn=>{
+  btn.onclick = ()=> sendEmote(btn.getAttribute('data-emote'));
+});
+
 elixir=5; lastElixirTime=Date.now(); initElixirBar();
 
 towers=[
@@ -1499,12 +1674,7 @@ towers=[
 units=[]; projectiles=[]; gameOver=false; selectedCard=null; placementCircle=null; battleReady=false;
 pendingActionKeys.clear();
 
-playerRef.child("ownedCards").once("value").then(s=>{ renderHand(s.val()||{}); });
-playerRef.child("ownedCards").on("value", s=>{
-if(document.getElementById("battleScreen").style.display==="block"){
-renderHand(s.val()||{});
-}
-});
+// Do not re-render hand on owned changes mid-battle (fixes jank)
 
 setupRoomAutoCleanup();
 
@@ -1530,16 +1700,20 @@ document.getElementById("battleScreen").style.display="none";
 document.getElementById("menuScreen").style.display="block";
 document.getElementById("cardBar").style.display="none";
 document.getElementById("elixirBar").style.display="none";
+document.getElementById("emoteTray").style.display="none";
 document.getElementById("statusText").innerText="Idle";
 
 if(actionsRef) actionsRef.off();
 if(stateRef)   stateRef.off();
 if(roomPlayersRef) roomPlayersRef.off();
-if(roomRef) roomRef.child("host").off();
+if(roomRef) {
+  roomRef.child("host").off();
+  roomRef.child("emotes").off();
+}
 
 leaveRoomAndMaybeDelete();
 
-placementCircle=null; selectedCard=null; gameOver=false;
+placementCircle=null; selectedCard=null; selectedHandIndex=null; gameOver=false;
 roomId=null; mySide=null; searching=false; battleReady=false;
 queueAdded=false; isHost=false; hostId=null;
 
@@ -1712,7 +1886,3 @@ overlay.addEventListener('click', hide);
 
 </body>
 </html>
-"""
-with open('/mnt/data/flash-royale-patched.html', 'w', encoding='utf-8') as f:
-    f.write(patched_html)
-'/mnt/data/flash-royale-patched.html'
