@@ -1,4 +1,5 @@
-<!DOCTYPE html>
+# Write the fully merged HTML (with real per-card avatars/sprites) to a new file
+html = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6444487225655573"
@@ -139,7 +140,7 @@ overflow:auto;
 text-align:left;
 background:rgba(17,24,39,0.85);
 border:2px solid #334155; border-radius:16px;
-box-shadow:0 8px 24px rgba(0,0,0,0.35);
+box-shadow: 0 8px 24px rgba(0,0,0,0.35);
 z-index:2;
 }
 .leaderboard h3{
@@ -338,7 +339,6 @@ animation: pulseText 1.6s ease-in-out infinite;
 
 <!-- MENU BACKGROUND (BUILT-IN) -->
 <svg id="menuBg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
-<!-- (unchanged SVG background) -->
 <defs>
 <linearGradient id="sky" x1="0" x2="0" y1="0" y2="1">
 <stop offset="0%" stop-color="#0b1228"/>
@@ -676,6 +676,32 @@ function levelMultiplier(level){
   return 1 + 0.08 * (Math.max(1, Math.min(MAX_LEVEL, level)) - 1);
 }
 
+/* NEW: Sprites (per-card avatars) */
+const spriteCache = {};
+const spriteUrlOverrides = {
+  "Skeleton": "https://img.icons8.com/color/96/skeleton.png"
+};
+function spriteForName(name){
+  if (spriteCache[name]) return spriteCache[name];
+  const card = allCards.find(c => c.name === name);
+  const url = (card && card.img) || spriteUrlOverrides[name] ||
+    "data:image/svg+xml;utf8," + encodeURIComponent(
+      `<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>
+         <rect width='64' height='64' rx='10' ry='10' fill='#334155'/>
+         <circle cx='32' cy='32' r='18' fill='#94a3b8'/>
+       </svg>`
+    );
+  const img = new Image();
+  img.src = url;
+  spriteCache[name] = img;
+  return img;
+}
+function spriteSizeFor(name){
+  const card = allCards.find(c => c.name === name);
+  const cost = card?.cost ?? 3;
+  return Math.max(34, Math.min(52, 38 + (cost - 3) * 2));
+}
+
 /* NEW: Deck + Hand rotation state */
 let playerLevels = {};
 let playerDeck = [];           // stored in DB
@@ -950,6 +976,7 @@ if(p.disconnected){ tryRejoinRoom(); playerRef.update({disconnected:false, onlin
 /************ Battle ************/
 const canvas=document.getElementById("battleCanvas");
 const ctx=canvas.getContext("2d");
+ctx.imageSmoothingEnabled = true; // NEW
 const towerImg=new Image(); towerImg.src="mini-castle.png";
 
 // Arena geometry (pathing)
@@ -1121,15 +1148,6 @@ ctx.beginPath(); ctx.moveTo(0, canvas.height*2/3); ctx.lineTo(canvas.width, canv
 
 ctx.fillStyle="rgba(0,0,255,0.05)"; ctx.fillRect(0, canvas.height/2, canvas.width, canvas.height/2);
 ctx.fillStyle="rgba(255,0,0,0.05)"; ctx.fillRect(0, 0, canvas.width, canvas.height/2);
-
-/* NEW: subtle overlay to indicate pocketable lanes (just a hint; optional)
-ctx.save(); ctx.globalAlpha=0.08;
-if(pocketBlue.left)  { ctx.fillStyle="#00ffff"; ctx.fillRect(0, 0, canvas.width/2, canvas.height/2); }
-if(pocketBlue.right) { ctx.fillStyle="#00ffff"; ctx.fillRect(canvas.width/2, 0, canvas.width/2, canvas.height/2); }
-if(pocketRed.left)   { ctx.fillStyle="#ff7f7f"; ctx.fillRect(0, canvas.height/2, canvas.width/2, canvas.height/2); }
-if(pocketRed.right)  { ctx.fillStyle="#ff7f7f"; ctx.fillRect(canvas.width/2, canvas.height/2, canvas.width/2, canvas.height/2); }
-ctx.restore();
-*/
 }
 
 function drawTower(t){
@@ -1149,11 +1167,41 @@ ctx.strokeText(nm, t.x, y);
 ctx.fillStyle='white'; ctx.fillText(nm, t.x, y);
 }
 
+/* NEW: Sprite-based unit renderer */
 function drawUnit(u){
-ctx.fillStyle = (u.side==="blue") ? "#8de1ff" : "#ff7f7f";
-ctx.beginPath(); ctx.arc(u.x, u.y, 14, 0, Math.PI*2); ctx.fill();
-ctx.fillStyle="#900"; ctx.fillRect(u.x-15, u.y-24, 30, 5);
-ctx.fillStyle="#3f3"; ctx.fillRect(u.x-15, u.y-24, 30*(u.hp/u.maxHp), 5);
+  const img = spriteForName(u.name);
+  const size = spriteSizeFor(u.name);
+  const half = size / 2;
+
+  // Soft shadow
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = "#000";
+  ctx.beginPath();
+  ctx.ellipse(u.x, u.y + half*0.60, half*0.70, half*0.35, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+
+  // Gentle bob animation (seeded per unit)
+  const t = Date.now() + (u.animSeed || 0);
+  const bob = Math.sin(t / 180) * 3;
+
+  // Draw the sprite centered at (x,y)
+  ctx.save();
+  ctx.translate(u.x, u.y - 6 + bob);
+  if (u.side === "red") ctx.scale(-1, 1);
+
+  if (img && img.complete && img.naturalWidth){
+    ctx.drawImage(img, -half, -half, size, size);
+  } else {
+    ctx.fillStyle = (u.side==="blue") ? "#8de1ff" : "#ff7f7f";
+    ctx.beginPath(); ctx.arc(0, 0, 14, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+
+  // HP bar
+  ctx.fillStyle = "#900"; ctx.fillRect(u.x-15, u.y-24, 30, 5);
+  ctx.fillStyle = "#3f3"; ctx.fillRect(u.x-15, u.y-24, 30*(u.hp/u.maxHp), 5);
 }
 
 /************ Simulation (host-only) ************/
@@ -1207,7 +1255,8 @@ function spawnSkeletonHorde(side, x, y, ownerId, baseCard){
       speed: Math.max(0.7, baseCard.speed*0.95),
       side, x:sx, y:sy, cooldown:0, dir:(side==="blue" ? -1 : 1),
       pathStage:'toBridge', targetX: pickNearestBridgeX(x), targetY: (side==='blue' ? (RIVER_Y + RIVER_H + 8) : (RIVER_Y - 8)),
-      goal: null, level: lvl
+      goal: null, level: lvl,
+      animSeed: Math.floor(Math.random()*1000) // NEW
     });
   }
 }
@@ -1252,7 +1301,8 @@ function spawnUnit(card, side, x, y, ownerId){
     range: card.range,
     speed, side, x, y, cooldown:0, dir:(side==="blue" ? -1 : 1),
     pathStage:'toBridge', targetX: bridgeX, targetY: startTargetY,
-    goal: null, level: lvl
+    goal: null, level: lvl,
+    animSeed: Math.floor(Math.random()*1000) // NEW
   });
 }
 
@@ -1615,13 +1665,13 @@ if(timerRunning){
 projectiles.forEach(p=>{ ctx.fillStyle="#ffd86b"; ctx.beginPath(); ctx.arc(p.x,p.y,5,0,Math.PI*2); ctx.fill(); });
 units.forEach(drawUnit);
 
+/* NEW: timer UI update (clients too) */
+updateTimerUI();
+
 if(placementCircle && selectedCard){
 ctx.beginPath(); ctx.arc(placementCircle.x, placementCircle.y, 24, 0, Math.PI*2);
 ctx.strokeStyle="#fff"; ctx.lineWidth=2; ctx.stroke();
 }
-
-/* NEW: timer UI update (clients too) */
-updateTimerUI();
 
 if(!gameOver) requestAnimationFrame(drawLoop);
 }
@@ -1954,3 +2004,13 @@ overlay.addEventListener('click', hide);
 
 </body>
 </html>
+"""
+# Quick fix: a typo slipped in drawArena (I used 'x='). Replace that token.
+html = html.replace("const bridges=[ {x=BRIDGE_CENTERS[0]-BRIDGE_W/2, y:RIVER_Y-6}, {x:BRIDGE_CENTERS[1]-BRIDGE_W/2, y:RIVER_Y-6} ];",
+                    "const bridges=[ {x:BRIDGE_CENTERS[0]-BRIDGE_W/2, y:RIVER_Y-6}, {x:BRIDGE_CENTERS[1]-BRIDGE_W/2, y:RIVER_Y-6} ];")
+
+out_path = "/mnt/data/flash-royale-avatars.html"
+with open(out_path, "w", encoding="utf-8") as f:
+    f.write(html)
+
+out_path
